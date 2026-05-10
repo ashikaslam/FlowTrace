@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import ActivitySession, DeveloperStatus
+from .models import ActivitySession, DeveloperStatus, CollaborationRequest, TaskCollaborator, CollaborationActivityLog
 
 
 class ActivitySessionSerializer(serializers.ModelSerializer):
@@ -7,6 +7,7 @@ class ActivitySessionSerializer(serializers.ModelSerializer):
     task_id = serializers.IntegerField(source="task.id", read_only=True)
     username = serializers.CharField(source="membership.username", read_only=True)
     duration_seconds = serializers.IntegerField(read_only=True)
+    collaborators = serializers.SerializerMethodField()
 
     class Meta:
         model = ActivitySession
@@ -14,7 +15,14 @@ class ActivitySessionSerializer(serializers.ModelSerializer):
             "id", "task_id", "task_title", "username",
             "started_at", "ended_at", "duration_seconds",
             "completion_at_start", "completion_at_end", "switch_note",
+            "collaborators",
         ]
+
+    def get_collaborators(self, obj):
+        collabs = TaskCollaborator.objects.filter(
+            task=obj.task, is_active=True
+        ).exclude(member=obj.membership).select_related("member")
+        return [c.member.username for c in collabs]
 
 
 class StartSessionSerializer(serializers.Serializer):
@@ -28,6 +36,43 @@ class SwitchTaskSerializer(serializers.Serializer):
     note = serializers.CharField(required=False, allow_blank=True, default="")
 
 
+class CollaborationRequestSerializer(serializers.ModelSerializer):
+    requester_username = serializers.CharField(source="requester.username", read_only=True)
+    target_username = serializers.CharField(source="target.username", read_only=True)
+    task_title = serializers.CharField(source="task.title", read_only=True)
+
+    class Meta:
+        model = CollaborationRequest
+        fields = [
+            "id", "requester_username", "target_username", "task_id", "task_title",
+            "status", "message", "created_at", "responded_at",
+        ]
+        read_only_fields = ["id", "requester_username", "target_username", "task_title", "status", "created_at", "responded_at"]
+
+
+class SendCollaborationRequestSerializer(serializers.Serializer):
+    target_username = serializers.CharField()
+    task_id = serializers.IntegerField()
+    message = serializers.CharField(required=False, allow_blank=True, default="")
+
+
+class TaskCollaboratorSerializer(serializers.ModelSerializer):
+    username = serializers.CharField(source="member.username", read_only=True)
+    full_name = serializers.CharField(source="member.user.full_name", read_only=True)
+
+    class Meta:
+        model = TaskCollaborator
+        fields = ["id", "username", "full_name", "joined_at", "left_at", "is_active"]
+
+
+class CollaborationActivityLogSerializer(serializers.ModelSerializer):
+    actor_username = serializers.CharField(source="actor.username", read_only=True)
+
+    class Meta:
+        model = CollaborationActivityLog
+        fields = ["id", "actor_username", "action_type", "metadata", "timestamp"]
+
+
 class DeveloperStatusSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="membership.username", read_only=True)
     current_task = serializers.SerializerMethodField()
@@ -39,10 +84,15 @@ class DeveloperStatusSerializer(serializers.ModelSerializer):
 
     def get_current_task(self, obj):
         if obj.current_session:
+            task = obj.current_session.task
+            collabs = TaskCollaborator.objects.filter(
+                task=task, is_active=True
+            ).exclude(member=obj.membership).select_related("member")
             return {
-                "id": obj.current_session.task.id,
-                "title": obj.current_session.task.title,
+                "id": task.id,
+                "title": task.title,
                 "started_at": obj.current_session.started_at,
-                "completion": obj.current_session.task.completion_percentage,
+                "completion": task.completion_percentage,
+                "collaborators": [c.member.username for c in collabs],
             }
         return None

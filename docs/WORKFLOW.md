@@ -82,3 +82,86 @@ DeveloperStatus.objects.filter(
     membership__workspace__slug=slug
 ).select_related('current_session__task')
 ```
+
+---
+
+## Collaboration Lifecycle
+
+### The Problem It Solves
+
+```
+14:00  Alex is stuck on Task X (payment bug)
+14:05  Alex requests collaboration from John
+14:06  John receives notification on dashboard
+14:07  John accepts
+         → TaskCollaborator created for John on Task X
+         → CollaborationActivityLog: request_sent, request_accepted, collab_started
+14:07  Both Alex and John work on Task X
+         → Task X appears in both developers' activity context
+16:00  Bug fixed. John leaves collaboration.
+         → TaskCollaborator.is_active = False, left_at = 16:00
+         → CollaborationActivityLog: collab_ended
+```
+
+Without FlowTrace: John's 2 hours on Task X are invisible. Alex gets all the credit.
+With FlowTrace: complete collaboration trail with timestamps, participants, and history.
+
+### Collaboration Request Flow
+
+```
+send_collaboration_request(target_username, task_id, message)
+  │
+  ├── Validate target is in same workspace
+  ├── Validate task belongs to workspace
+  ├── Create or re-open CollaborationRequest (status=pending)
+  └── Write CollaborationActivityLog: request_sent
+
+respond_to_request(request_id, action='accept'|'reject')
+  │
+  ├── Update CollaborationRequest.status
+  ├── Set responded_at = now
+  ├── Write log: request_accepted or request_rejected
+  └── [if accept]
+        ├── Create/reactivate TaskCollaborator
+        └── Write log: collab_started
+
+leave_collaboration(task_id)
+  │
+  ├── Set TaskCollaborator.is_active = False, left_at = now
+  └── Write log: collab_ended
+```
+
+### Collaboration Status Transitions
+
+```
+[pending] ──accept──► [accepted]
+[pending] ──reject──► [rejected]
+[pending] ──cancel──► [cancelled]
+[rejected|cancelled] ──re-request──► [pending]  (same row re-opened)
+```
+
+### Shared Activity Visibility
+
+When a developer accepts a collaboration request, they appear in:
+
+- `TaskCollaborator` list on the task detail page (active/inactive status + join/leave timestamps)
+- `CollaborationActivityLog` for the task (full permanent history)
+- **Developer timeline** — `ActivitySession` objects include a `collaborators` field listing co-workers on the same task. The timeline has two tabs: "My Sessions" (own sessions with collab badges) and "Collaborated Tasks" (sessions on tasks the developer joined as a collaborator)
+- **Developer Collaboration section** — two tabs: "Pending Requests" (incoming with Accept/Reject) and "History" (all past sent/received requests with status)
+- **Manager overview cards** — each live developer card shows active collaborators as pills when the current task has co-workers
+- **Manager Collaborations section** — dedicated view listing all tasks in the workspace with active collaborators, showing all participant usernames and join times
+- **Manager timeline** — sessions with collaborators show a collab badge and accent-colored card border
+
+### Workspace Isolation Guarantee
+
+Every collaboration lookup filters by `workspace__slug`:
+
+```python
+# Member search — only same-workspace members returned
+WorkspaceMembership.objects.filter(workspace__slug=workspace_slug, is_active=True)
+
+# Request creation — target must exist in same workspace
+WorkspaceMembership.objects.get(workspace__slug=workspace_slug, username=target_username)
+```
+
+Cross-workspace collaboration is structurally impossible, not just policy-enforced.
