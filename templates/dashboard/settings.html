@@ -1,0 +1,14 @@
+{% extends "base/layout.html" %}
+{% block title %}Settings — FlowTrace{% endblock %}
+{% block body %}
+<div data-workspace="{{ workspace_slug }}" class="min-h-screen p-8 max-w-2xl mx-auto">
+  <div class="mb-6">
+    <a href="/dashboard/{{ workspace_slug }}/" class="text-muted text-sm hover:text-white transition">← Back to Dashboard</a>
+  </div>
+  <h1 class="text-white text-xl font-semibold mb-6">Workspace Settings</h1>
+  <div class="bg-panel border border-border rounded-xl p-6">
+    <div class="text-muted text-xs mb-1">Workspace Slug</div>
+    <div class="text-accent font-mono text-sm">{{ workspace_slug }}</div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,125 @@
+{% extends "base/layout.html" %}
+{% block title %}FlowTrace — Developer Workflow Intelligence{% endblock %}
+{% block body %}
+<div class="min-h-screen flex flex-col items-center justify-center px-4">
+  <!-- Logo -->
+  <div class="mb-8 text-center">
+    <div class="flex items-center justify-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-lg bg-accent flex items-center justify-center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2.5">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+      </div>
+      <span class="text-2xl font-semibold text-white tracking-tight">FlowTrace</span>
+    </div>
+    <p class="text-muted text-sm">Developer workflow intelligence platform</p>
+  </div>
+
+  <!-- Hero -->
+  <div class="max-w-xl text-center mb-12">
+    <h1 class="text-4xl font-semibold text-white mb-4 leading-tight">
+      Track the real flow of<br/>developer work
+    </h1>
+    <p class="text-muted text-base leading-relaxed">
+      Visualize task switching, context changes, and workflow timelines.
+      Built for teams who want to understand actual productivity — not just ticket counts.
+    </p>
+  </div>
+
+  <!-- Actions -->
+  <div class="flex gap-4 mb-16">
+    <a href="/register/" class="px-6 py-2.5 bg-accent text-surface font-medium rounded-md hover:bg-blue-400 transition text-sm">
+      Create Workspace
+    </a>
+    <button onclick="document.getElementById('login-modal').classList.remove('hidden')"
+      class="px-6 py-2.5 border border-border text-white rounded-md hover:border-accent transition text-sm">
+      Sign In
+    </button>
+  </div>
+
+  <!-- Feature grid -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl w-full mb-16">
+    {% for icon, title, desc in features %}
+    <div class="bg-panel border border-border rounded-lg p-5">
+      <div class="text-accent text-xl mb-3">{{ icon }}</div>
+      <div class="text-white text-sm font-medium mb-1">{{ title }}</div>
+      <div class="text-muted text-xs leading-relaxed">{{ desc }}</div>
+    </div>
+    {% endfor %}
+    <div class="bg-panel border border-border rounded-lg p-5">
+      <div class="text-accent text-xl mb-3">⚡</div>
+      <div class="text-white text-sm font-medium mb-1">Activity Timeline</div>
+      <div class="text-muted text-xs leading-relaxed">Git-style visual timeline of every task movement and context switch.</div>
+    </div>
+    <div class="bg-panel border border-border rounded-lg p-5">
+      <div class="text-accent text-xl mb-3">🔀</div>
+      <div class="text-white text-sm font-medium mb-1">Context Switch Tracking</div>
+      <div class="text-muted text-xs leading-relaxed">Log every interruption with completion percentage and notes.</div>
+    </div>
+    <div class="bg-panel border border-border rounded-lg p-5">
+      <div class="text-accent text-xl mb-3">📊</div>
+      <div class="text-white text-sm font-medium mb-1">Live Dashboard</div>
+      <div class="text-muted text-xs leading-relaxed">See what every developer is working on right now, in real time.</div>
+    </div>
+  </div>
+</div>
+
+<!-- Login modal -->
+<div id="login-modal" class="hidden fixed inset-0 bg-black/60 flex items-center justify-center z-50 px-4">
+  <div class="bg-panel border border-border rounded-xl p-8 w-full max-w-sm">
+    <div class="flex justify-between items-center mb-6">
+      <h2 class="text-white font-semibold">Sign In to Workspace</h2>
+      <button onclick="document.getElementById('login-modal').classList.add('hidden')" class="text-muted hover:text-white">✕</button>
+    </div>
+    <div id="login-error" class="hidden mb-4 text-danger text-xs bg-danger/10 border border-danger/30 rounded p-3"></div>
+    <form id="login-form" class="space-y-4">
+      <div>
+        <label class="text-muted text-xs mb-1 block">Workspace Slug</label>
+        <input name="workspace_slug" placeholder="e.g. tech-soft-x92k"
+          class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+      </div>
+      <div>
+        <label class="text-muted text-xs mb-1 block">Username</label>
+        <input name="username" placeholder="your workspace username"
+          class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+      </div>
+      <div>
+        <label class="text-muted text-xs mb-1 block">Password</label>
+        <input name="password" type="password"
+          class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+      </div>
+      <button type="submit" class="w-full py-2.5 bg-accent text-surface font-medium rounded-md hover:bg-blue-400 transition text-sm">
+        Sign In
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const errEl = document.getElementById('login-error');
+  errEl.classList.add('hidden');
+  try {
+    const res = await fetch('/api/auth/login/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(Object.fromEntries(fd)),
+    });
+    const data = await res.json();
+    if (!res.ok) { errEl.textContent = data.detail || JSON.stringify(data); errEl.classList.remove('hidden'); return; }
+    localStorage.setItem('access_token', data.access);
+    localStorage.setItem('refresh_token', data.refresh);
+    localStorage.setItem('workspace_slug', data.workspace);
+    localStorage.setItem('role', data.role);
+    const slug = data.workspace;
+    window.location.href = data.role === 'manager' ? `/dashboard/${slug}/` : `/dashboard/${slug}/dev/`;
+  } catch (err) {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.classList.remove('hidden');
+  }
+});
+</script>
+{% endblock %}

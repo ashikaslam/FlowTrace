@@ -1,0 +1,289 @@
+{% extends "base/layout.html" %}
+{% block title %}Manager Dashboard — FlowTrace{% endblock %}
+{% block body %}
+<div data-workspace="{{ workspace_slug }}" class="flex h-screen overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-56 bg-panel border-r border-border flex flex-col flex-shrink-0">
+    <div class="p-4 border-b border-border">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-accent flex items-center justify-center">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <span class="text-white text-sm font-semibold">FlowTrace</span>
+      </div>
+      <div class="mt-2 text-xs text-muted font-mono" id="ws-name">Loading...</div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <a href="#" onclick="showSection('overview')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>⬡</span> Overview
+      </a>
+      <a href="#" onclick="showSection('developers')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>👥</span> Developers
+      </a>
+      <a href="#" onclick="showSection('timeline')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>⏱</span> Timeline
+      </a>
+      <a href="#" onclick="showSection('team')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>⚙</span> Team
+      </a>
+    </nav>
+    <div class="p-3 border-t border-border">
+      <a href="/logout/" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-danger transition">
+        <span>↩</span> Sign Out
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-y-auto scrollbar-thin">
+
+    <!-- Header -->
+    <div class="sticky top-0 z-10 bg-surface/80 backdrop-blur border-b border-border px-6 py-3 flex items-center justify-between">
+      <div>
+        <h1 class="text-white font-semibold text-sm" id="section-title">Overview</h1>
+        <p class="text-muted text-xs" id="section-sub">Live workspace activity</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="flex items-center gap-1.5 text-xs text-success">
+          <span class="w-2 h-2 rounded-full bg-success pulse-dot"></span>
+          <span id="active-count">0 active</span>
+        </div>
+        <button onclick="showSection('team')" class="px-3 py-1.5 bg-accent text-surface text-xs font-medium rounded-md hover:bg-blue-400 transition">
+          + Add Developer
+        </button>
+      </div>
+    </div>
+
+    <!-- Overview Section -->
+    <div id="section-overview" class="p-6">
+      <!-- Stats row -->
+      <div class="grid grid-cols-4 gap-4 mb-6">
+        <div class="bg-panel border border-border rounded-lg p-4">
+          <div class="text-muted text-xs mb-1">Total Members</div>
+          <div class="text-white text-2xl font-semibold" id="stat-members">—</div>
+        </div>
+        <div class="bg-panel border border-border rounded-lg p-4">
+          <div class="text-muted text-xs mb-1">Active Now</div>
+          <div class="text-success text-2xl font-semibold" id="stat-active">—</div>
+        </div>
+        <div class="bg-panel border border-border rounded-lg p-4">
+          <div class="text-muted text-xs mb-1">Total Tasks</div>
+          <div class="text-white text-2xl font-semibold" id="stat-tasks">—</div>
+        </div>
+        <div class="bg-panel border border-border rounded-lg p-4">
+          <div class="text-muted text-xs mb-1">Workspace</div>
+          <div class="text-accent text-sm font-mono mt-1" id="stat-slug">—</div>
+        </div>
+      </div>
+
+      <!-- Live developer cards -->
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-white text-sm font-medium">Live Developer Status</h2>
+        <span class="text-muted text-xs">Auto-refreshes every 10s</span>
+      </div>
+      <div id="dev-cards" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+    </div>
+
+    <!-- Developers Section -->
+    <div id="section-developers" class="p-6 hidden">
+      <div class="mb-4 flex items-center justify-between">
+        <h2 class="text-white text-sm font-medium">All Developers</h2>
+      </div>
+      <div id="dev-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Timeline Section -->
+    <div id="section-timeline" class="p-6 hidden">
+      <div class="mb-4 flex items-center gap-4">
+        <select id="timeline-user" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent">
+          <option value="">Select developer...</option>
+        </select>
+        <input type="date" id="timeline-date" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent" />
+        <button onclick="loadTimeline()" class="px-4 py-1.5 bg-accent text-surface text-sm rounded-md hover:bg-blue-400 transition">Load</button>
+      </div>
+      <div id="timeline-view" class="timeline-line pl-8 space-y-4"></div>
+    </div>
+
+    <!-- Team Management Section -->
+    <div id="section-team" class="p-6 hidden">
+      <div class="max-w-md">
+        <h2 class="text-white text-sm font-medium mb-4">Add Developer to Workspace</h2>
+        <div id="team-error" class="hidden mb-4 text-danger text-xs bg-danger/10 border border-danger/30 rounded p-3"></div>
+        <div id="team-success" class="hidden mb-4 text-success text-xs bg-success/10 border border-success/30 rounded p-3"></div>
+        <form id="add-dev-form" class="space-y-3">
+          <div>
+            <label class="text-muted text-xs mb-1 block">Full Name</label>
+            <input name="full_name" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label class="text-muted text-xs mb-1 block">Email</label>
+            <input name="email" type="email" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label class="text-muted text-xs mb-1 block">Workspace Username</label>
+            <input name="username" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          </div>
+          <button type="submit" class="w-full py-2 bg-accent text-surface font-medium rounded-md hover:bg-blue-400 transition text-sm">
+            Create Developer Account
+          </button>
+        </form>
+      </div>
+    </div>
+
+  </main>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const slug = '{{ workspace_slug }}';
+document.body.dataset.workspace = slug;
+
+function showSection(name) {
+  ['overview','developers','timeline','team'].forEach(s => {
+    document.getElementById(`section-${s}`).classList.toggle('hidden', s !== name);
+  });
+  const titles = { overview: ['Overview','Live workspace activity'], developers: ['Developers','All workspace members'], timeline: ['Timeline','Developer activity timeline'], team: ['Team Management','Add developers to workspace'] };
+  document.getElementById('section-title').textContent = titles[name][0];
+  document.getElementById('section-sub').textContent = titles[name][1];
+  if (name === 'developers') loadDevList();
+  if (name === 'timeline') loadTimelineUsers();
+}
+
+async function loadStats() {
+  const data = await API.get(`/api/workspaces/${slug}/stats/`);
+  if (!data) return;
+  document.getElementById('stat-members').textContent = data.total_members;
+  document.getElementById('stat-active').textContent = data.active_now;
+  document.getElementById('stat-tasks').textContent = data.total_tasks;
+  document.getElementById('stat-slug').textContent = slug;
+  document.getElementById('active-count').textContent = `${data.active_now} active`;
+}
+
+async function loadLiveStatus() {
+  const data = await API.get(`/api/activity/${slug}/live/`);
+  if (!data) return;
+  const container = document.getElementById('dev-cards');
+  container.innerHTML = data.map(dev => {
+    const task = dev.current_task;
+    const isActive = !!task;
+    return `
+    <div class="bg-panel border border-border rounded-lg p-4 hover:border-accent/50 transition">
+      <div class="flex items-center justify-between mb-3">
+        <div class="flex items-center gap-2">
+          <div class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs text-accent font-mono">
+            ${dev.username[0].toUpperCase()}
+          </div>
+          <span class="text-white text-sm font-medium">${dev.username}</span>
+        </div>
+        <span class="text-xs px-2 py-0.5 rounded-full ${isActive ? 'bg-success/10 text-success border border-success/30' : 'bg-surface text-muted border border-border'}">
+          ${isActive ? '● active' : '○ idle'}
+        </span>
+      </div>
+      ${task ? `
+        <div class="bg-surface rounded-md p-3">
+          <div class="text-white text-xs font-medium truncate">${task.title}</div>
+          <div class="flex items-center justify-between mt-2">
+            <div class="flex-1 bg-border rounded-full h-1 mr-3">
+              <div class="bg-accent h-1 rounded-full" style="width:${task.completion}%"></div>
+            </div>
+            <span class="text-muted text-xs">${task.completion}%</span>
+          </div>
+          <div class="text-muted text-xs mt-1">since ${new Date(task.started_at).toLocaleTimeString()}</div>
+        </div>
+      ` : '<div class="text-muted text-xs">No active task</div>'}
+    </div>`;
+  }).join('');
+}
+
+async function loadDevList() {
+  const data = await API.get(`/api/auth/${slug}/members/`);
+  if (!data) return;
+  const members = data.results || data;
+  document.getElementById('dev-list').innerHTML = members.map(m => `
+    <div class="bg-panel border border-border rounded-lg px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs text-accent font-mono">
+          ${m.username[0].toUpperCase()}
+        </div>
+        <div>
+          <div class="text-white text-sm">${m.username}</div>
+          <div class="text-muted text-xs">${m.user.email}</div>
+        </div>
+      </div>
+      <span class="text-xs px-2 py-0.5 rounded border ${m.role === 'manager' ? 'border-warning/40 text-warning' : 'border-border text-muted'}">${m.role}</span>
+    </div>
+  `).join('');
+}
+
+async function loadTimelineUsers() {
+  const data = await API.get(`/api/auth/${slug}/members/`);
+  if (!data) return;
+  const members = data.results || data;
+  const sel = document.getElementById('timeline-user');
+  sel.innerHTML = '<option value="">Select developer...</option>' + members.map(m => `<option value="${m.username}">${m.username}</option>`).join('');
+  document.getElementById('timeline-date').value = new Date().toISOString().split('T')[0];
+}
+
+async function loadTimeline() {
+  const username = document.getElementById('timeline-user').value;
+  const date = document.getElementById('timeline-date').value;
+  if (!username) return;
+  const data = await API.get(`/api/activity/${slug}/timeline/${username}/?date=${date}`);
+  if (!data) return;
+  const sessions = data.results || data;
+  const container = document.getElementById('timeline-view');
+  if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No activity for this date.</div>'; return; }
+  container.innerHTML = sessions.map((s, i) => {
+    const dur = s.duration_seconds;
+    const mins = Math.floor(dur / 60);
+    const ended = s.ended_at ? new Date(s.ended_at).toLocaleTimeString() : 'ongoing';
+    return `
+    <div class="relative flex gap-4">
+      <div class="timeline-dot ${s.ended_at ? 'bg-surface' : 'bg-accent'} border-2 ${s.ended_at ? 'border-border' : 'border-accent'} z-10"></div>
+      <div class="flex-1 bg-panel border border-border rounded-lg p-3 mb-2">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-white text-sm font-medium">${s.task_title}</span>
+          <span class="text-xs px-2 py-0.5 rounded ${s.ended_at ? 'bg-surface text-muted' : 'bg-accent/10 text-accent border border-accent/30'}">
+            ${s.ended_at ? 'completed' : 'active'}
+          </span>
+        </div>
+        <div class="flex items-center gap-4 text-xs text-muted">
+          <span>${new Date(s.started_at).toLocaleTimeString()} → ${ended}</span>
+          <span>${mins}m</span>
+          ${s.completion_at_end !== null ? `<span class="text-success">${s.completion_at_end}% done</span>` : ''}
+        </div>
+        ${s.switch_note ? `<div class="mt-2 text-xs text-muted italic border-l-2 border-border pl-2">${s.switch_note}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('add-dev-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const errEl = document.getElementById('team-error');
+  const okEl = document.getElementById('team-success');
+  errEl.classList.add('hidden'); okEl.classList.add('hidden');
+  const res = await fetch(`/api/auth/${slug}/developers/create/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('access_token')}` },
+    body: JSON.stringify(Object.fromEntries(fd)),
+  });
+  const data = await res.json();
+  if (!res.ok) { errEl.textContent = JSON.stringify(data); errEl.classList.remove('hidden'); return; }
+  okEl.innerHTML = `Developer created!<br/>Username: <strong>${data.membership.username}</strong><br/>Password: <code class="font-mono">${data.generated_password}</code><br/>Login URL: <a href="${data.login_url}" class="underline">${data.login_url}</a>`;
+  okEl.classList.remove('hidden');
+  e.target.reset();
+});
+
+// Load workspace name
+API.get(`/api/workspaces/${slug}/`).then(d => {
+  if (d) document.getElementById('ws-name').textContent = d.name;
+});
+
+loadStats();
+loadLiveStatus();
+setInterval(() => { loadStats(); loadLiveStatus(); }, 10000);
+</script>
+{% endblock %}

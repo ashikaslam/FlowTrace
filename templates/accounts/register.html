@@ -1,0 +1,247 @@
+{% extends "base/layout.html" %}
+{% block title %}Create Account — FlowTrace{% endblock %}
+{% block body %}
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-md">
+
+    <!-- Logo -->
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-2 text-white font-semibold text-lg">
+        <div class="w-7 h-7 rounded bg-accent flex items-center justify-center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        FlowTrace
+      </a>
+      <p class="text-muted text-sm mt-2">Create your account & workspace</p>
+    </div>
+
+    <!-- Form card -->
+    <div class="bg-panel border border-border rounded-xl p-8">
+      <div id="reg-error" class="hidden mb-4 text-danger text-xs bg-danger/10 border border-danger/30 rounded-lg p-3"></div>
+
+      <form id="reg-form" class="space-y-4">
+        <div>
+          <label class="text-muted text-xs mb-1 block">Full Name</label>
+          <input name="full_name" placeholder="Jane Smith" autocomplete="name"
+            class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent transition" />
+        </div>
+        <div>
+          <label class="text-muted text-xs mb-1 block">Email</label>
+          <input name="email" type="email" placeholder="jane@company.com" autocomplete="email"
+            class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent transition" />
+        </div>
+        <div>
+          <label class="text-muted text-xs mb-1 block">Password</label>
+          <input name="password" type="password" placeholder="min 8 characters" autocomplete="new-password"
+            class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent transition" />
+        </div>
+        <div class="border-t border-border pt-4">
+          <label class="text-muted text-xs mb-1 block">Workspace Name</label>
+          <input name="workspace_name" placeholder="My Company"
+            class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent transition" />
+          <p class="text-muted text-xs mt-1.5">A unique login slug will be auto-generated</p>
+        </div>
+        <button type="submit" id="submit-btn"
+          class="w-full py-2.5 bg-accent text-surface font-medium rounded-md hover:bg-blue-400 transition text-sm flex items-center justify-center gap-2">
+          <span id="btn-text">Create Account & Workspace</span>
+          <svg id="btn-spinner" class="hidden animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </button>
+      </form>
+
+      <p class="text-center text-muted text-xs mt-5">
+        Already have an account? <a href="/" class="text-accent hover:underline">Sign in</a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<!-- ✅ Credentials popup -->
+<div id="creds-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="bg-panel border border-border rounded-2xl p-8 w-full max-w-md shadow-2xl">
+
+    <!-- Header -->
+    <div class="flex items-center gap-3 mb-6">
+      <div class="w-10 h-10 rounded-full bg-success/10 border border-success/30 flex items-center justify-center text-success text-lg">✓</div>
+      <div>
+        <div class="text-white font-semibold">Workspace Created!</div>
+        <div class="text-muted text-xs mt-0.5">Save your credentials before continuing</div>
+      </div>
+    </div>
+
+    <!-- Credentials -->
+    <div class="space-y-3 mb-6">
+      <div class="bg-surface rounded-lg p-4 border border-border">
+        <div class="text-muted text-xs mb-2 uppercase tracking-wider">Workspace</div>
+        <div class="flex items-center justify-between">
+          <span class="text-white font-mono text-sm" id="cred-workspace-name">—</span>
+          <span class="text-xs text-muted bg-panel border border-border px-2 py-0.5 rounded font-mono" id="cred-workspace-slug">—</span>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-lg p-4 border border-border">
+        <div class="text-muted text-xs mb-3 uppercase tracking-wider">Your Login Credentials</div>
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs">Workspace Slug</span>
+            <div class="flex items-center gap-2">
+              <span class="text-accent font-mono text-sm" id="cred-slug">—</span>
+              <button onclick="copyText('cred-slug', this)" class="text-muted hover:text-white transition text-xs">⎘</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs">Username</span>
+            <div class="flex items-center gap-2">
+              <span class="text-white font-mono text-sm" id="cred-username">—</span>
+              <button onclick="copyText('cred-username', this)" class="text-muted hover:text-white transition text-xs">⎘</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs">Password</span>
+            <div class="flex items-center gap-2">
+              <span class="text-white font-mono text-sm" id="cred-password">—</span>
+              <button onclick="copyText('cred-password', this)" class="text-muted hover:text-white transition text-xs">⎘</button>
+            </div>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-muted text-xs">Role</span>
+            <span class="text-warning font-mono text-sm">manager</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-surface rounded-lg p-3 border border-border">
+        <div class="text-muted text-xs mb-1">Login URL</div>
+        <div class="flex items-center justify-between">
+          <span class="text-accent text-xs font-mono" id="cred-login-url">—</span>
+          <button onclick="copyText('cred-login-url', this)" class="text-muted hover:text-white transition text-xs">⎘</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Warning -->
+    <div class="flex items-start gap-2 mb-6 bg-warning/5 border border-warning/20 rounded-lg p-3">
+      <span class="text-warning text-sm mt-0.5">⚠</span>
+      <p class="text-warning text-xs leading-relaxed">Save these credentials now. Your password won't be shown again.</p>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-3">
+      <button onclick="copyAllCredentials()" class="flex-1 py-2.5 border border-border text-muted text-sm rounded-md hover:text-white hover:border-accent transition">
+        Copy All
+      </button>
+      <button onclick="goToDashboard()" class="flex-1 py-2.5 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">
+        Go to Dashboard →
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let credsData = {};
+
+document.getElementById('reg-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const errEl = document.getElementById('reg-error');
+  const btn = document.getElementById('submit-btn');
+  const btnText = document.getElementById('btn-text');
+  const spinner = document.getElementById('btn-spinner');
+
+  errEl.classList.add('hidden');
+  btn.disabled = true;
+  btnText.textContent = 'Creating...';
+  spinner.classList.remove('hidden');
+
+  try {
+    const res = await fetch('/api/auth/register-workspace/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: fd.get('email'),
+        full_name: fd.get('full_name'),
+        password: fd.get('password'),
+        workspace_name: fd.get('workspace_name'),
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      const msg = data.error || data.email?.[0] || data.password?.[0] || data.detail || JSON.stringify(data);
+      errEl.textContent = msg;
+      errEl.classList.remove('hidden');
+      return;
+    }
+
+    // Store tokens
+    localStorage.setItem('access_token', data.access);
+    localStorage.setItem('refresh_token', data.refresh);
+    localStorage.setItem('workspace_slug', data.workspace_slug);
+    localStorage.setItem('role', data.role);
+
+    // Store creds for popup
+    credsData = {
+      workspace_name: data.workspace_name,
+      workspace_slug: data.workspace_slug,
+      username: data.username,
+      password: fd.get('password'),
+      login_url: window.location.origin + data.login_url,
+    };
+
+    showCredsModal();
+
+  } catch (err) {
+    errEl.textContent = 'Network error. Please try again.';
+    errEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = 'Create Account & Workspace';
+    spinner.classList.add('hidden');
+  }
+});
+
+function showCredsModal() {
+  document.getElementById('cred-workspace-name').textContent = credsData.workspace_name;
+  document.getElementById('cred-workspace-slug').textContent = credsData.workspace_slug;
+  document.getElementById('cred-slug').textContent = credsData.workspace_slug;
+  document.getElementById('cred-username').textContent = credsData.username;
+  document.getElementById('cred-password').textContent = credsData.password;
+  document.getElementById('cred-login-url').textContent = credsData.login_url;
+  document.getElementById('creds-modal').classList.remove('hidden');
+}
+
+function goToDashboard() {
+  window.location.href = `/dashboard/${credsData.workspace_slug}/`;
+}
+
+function copyText(elId, btn) {
+  const text = document.getElementById(elId).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓';
+    btn.classList.add('text-success');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('text-success'); }, 1500);
+  });
+}
+
+function copyAllCredentials() {
+  const text = [
+    `Workspace: ${credsData.workspace_name}`,
+    `Workspace Slug: ${credsData.workspace_slug}`,
+    `Username: ${credsData.username}`,
+    `Password: ${credsData.password}`,
+    `Login URL: ${credsData.login_url}`,
+  ].join('\n');
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = event.target;
+    btn.textContent = '✓ Copied!';
+    btn.classList.add('text-success', 'border-success/40');
+    setTimeout(() => { btn.textContent = 'Copy All'; btn.classList.remove('text-success', 'border-success/40'); }, 2000);
+  });
+}
+</script>
+{% endblock %}

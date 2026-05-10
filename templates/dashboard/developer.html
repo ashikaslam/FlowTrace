@@ -1,0 +1,432 @@
+{% extends "base/layout.html" %}
+{% block title %}Developer Dashboard — FlowTrace{% endblock %}
+{% block body %}
+<div data-workspace="{{ workspace_slug }}" class="flex h-screen overflow-hidden">
+
+  <!-- Sidebar -->
+  <aside class="w-56 bg-panel border-r border-border flex flex-col flex-shrink-0">
+    <div class="p-4 border-b border-border">
+      <div class="flex items-center gap-2">
+        <div class="w-6 h-6 rounded bg-accent flex items-center justify-center">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        <span class="text-white text-sm font-semibold">FlowTrace</span>
+      </div>
+      <div class="mt-2 text-xs text-muted font-mono" id="ws-name">Loading...</div>
+    </div>
+    <nav class="flex-1 p-3 space-y-1">
+      <a href="#" onclick="showSection('active')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>⚡</span> Active Task
+      </a>
+      <a href="#" onclick="showSection('tasks')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>📋</span> My Tasks
+      </a>
+      <a href="#" onclick="showSection('timeline')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>⏱</span> My Timeline
+      </a>
+    </nav>
+    <div class="p-3 border-t border-border">
+      <a href="/logout/" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-danger transition">
+        <span>↩</span> Sign Out
+      </a>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="flex-1 overflow-y-auto scrollbar-thin">
+
+    <!-- Header -->
+    <div class="sticky top-0 z-10 bg-surface/80 backdrop-blur border-b border-border px-6 py-3 flex items-center justify-between">
+      <div>
+        <h1 class="text-white font-semibold text-sm" id="section-title">Active Task</h1>
+        <p class="text-muted text-xs" id="section-sub">Your current work session</p>
+      </div>
+      <div id="current-task-badge" class="hidden flex items-center gap-2 text-xs bg-success/10 border border-success/30 text-success px-3 py-1 rounded-full">
+        <span class="w-1.5 h-1.5 rounded-full bg-success pulse-dot"></span>
+        <span id="badge-task-name">Working...</span>
+      </div>
+    </div>
+
+    <!-- Active Task Section -->
+    <div id="section-active" class="p-6">
+      <!-- Current session card -->
+      <div id="active-card" class="bg-panel border border-border rounded-xl p-6 mb-6">
+        <div class="text-muted text-xs mb-3 uppercase tracking-wider">Current Session</div>
+        <div id="no-session" class="text-center py-8">
+          <div class="text-4xl mb-3">⏸</div>
+          <div class="text-white text-sm mb-1">No active task</div>
+          <div class="text-muted text-xs">Start a task to begin tracking your workflow</div>
+        </div>
+        <div id="has-session" class="hidden">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <div class="text-white text-lg font-medium" id="active-task-title">—</div>
+              <div class="text-muted text-xs mt-1" id="active-task-since">—</div>
+            </div>
+            <div class="text-right">
+              <div class="text-2xl font-semibold text-accent" id="active-timer">00:00</div>
+              <div class="text-muted text-xs">elapsed</div>
+            </div>
+          </div>
+          <div class="mb-4">
+            <div class="flex justify-between text-xs text-muted mb-1">
+              <span>Completion</span>
+              <span id="active-completion">0%</span>
+            </div>
+            <div class="bg-surface rounded-full h-2">
+              <div id="active-progress-bar" class="bg-accent h-2 rounded-full transition-all" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <button onclick="showStopModal()" class="px-4 py-2 bg-surface border border-border text-white text-xs rounded-md hover:border-warning transition">
+              ⏸ Pause
+            </button>
+            <button onclick="showSwitchModal()" class="px-4 py-2 bg-accent text-surface text-xs font-medium rounded-md hover:bg-blue-400 transition">
+              ⇄ Switch Task
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick start -->
+      <div class="bg-panel border border-border rounded-xl p-5">
+        <div class="text-muted text-xs mb-3 uppercase tracking-wider">Quick Start Task</div>
+        <div class="flex gap-2">
+          <input id="quick-task-input" placeholder="Task title..." class="flex-1 bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          <button onclick="quickCreateAndStart()" class="px-4 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">
+            Start
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tasks Section -->
+    <div id="section-tasks" class="p-6 hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white text-sm font-medium">My Tasks</h2>
+        <button onclick="openModal('new-task-modal')" class="px-3 py-1.5 bg-accent text-surface text-xs font-medium rounded-md hover:bg-blue-400 transition">
+          + New Task
+        </button>
+      </div>
+      <div class="flex gap-2 mb-4">
+        <button onclick="filterTasks('')" class="filter-btn px-3 py-1 text-xs rounded border border-border text-muted hover:text-white transition" data-filter="">All</button>
+        <button onclick="filterTasks('active')" class="filter-btn px-3 py-1 text-xs rounded border border-border text-muted hover:text-white transition" data-filter="active">Active</button>
+        <button onclick="filterTasks('paused')" class="filter-btn px-3 py-1 text-xs rounded border border-border text-muted hover:text-white transition" data-filter="paused">Paused</button>
+        <button onclick="filterTasks('completed')" class="filter-btn px-3 py-1 text-xs rounded border border-border text-muted hover:text-white transition" data-filter="completed">Completed</button>
+      </div>
+      <div id="task-list" class="space-y-2"></div>
+    </div>
+
+    <!-- Timeline Section -->
+    <div id="section-timeline" class="p-6 hidden">
+      <div class="flex items-center gap-3 mb-4">
+        <input type="date" id="my-timeline-date" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent" />
+        <button onclick="loadMyTimeline()" class="px-4 py-1.5 bg-accent text-surface text-sm rounded-md hover:bg-blue-400 transition">Load</button>
+      </div>
+      <div id="my-timeline" class="timeline-line pl-8 space-y-4"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Switch Task Modal -->
+<div id="switch-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+    <h3 class="text-white font-semibold mb-4">Switch Task</h3>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Completion % of current task</label>
+      <input type="range" id="switch-completion" min="0" max="100" value="0" class="w-full accent-blue-500" oninput="document.getElementById('switch-completion-val').textContent=this.value+'%'" />
+      <div class="text-accent text-sm mt-1" id="switch-completion-val">0%</div>
+    </div>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Note (optional)</label>
+      <input id="switch-note" placeholder="Why switching?" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+    </div>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Switch to task</label>
+      <select id="switch-task-select" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
+        <option value="">Select task...</option>
+      </select>
+    </div>
+    <div class="flex gap-2">
+      <button onclick="closeModal('switch-modal')" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="doSwitch()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Switch</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stop Modal -->
+<div id="stop-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-sm">
+    <h3 class="text-white font-semibold mb-4">Pause Session</h3>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Completion %</label>
+      <input type="range" id="stop-completion" min="0" max="100" value="0" class="w-full accent-blue-500" oninput="document.getElementById('stop-completion-val').textContent=this.value+'%'" />
+      <div class="text-accent text-sm mt-1" id="stop-completion-val">0%</div>
+    </div>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Note (optional)</label>
+      <input id="stop-note" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+    </div>
+    <div class="flex gap-2">
+      <button onclick="closeModal('stop-modal')" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="doStop()" class="flex-1 py-2 bg-warning text-surface text-sm font-medium rounded-md hover:bg-yellow-400 transition">Pause</button>
+    </div>
+  </div>
+</div>
+
+<!-- New Task Modal -->
+<div id="new-task-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+    <h3 class="text-white font-semibold mb-4">New Task</h3>
+    <form id="new-task-form" class="space-y-3">
+      <div>
+        <label class="text-muted text-xs mb-1 block">Title</label>
+        <input name="title" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+      </div>
+      <div>
+        <label class="text-muted text-xs mb-1 block">Description (optional)</label>
+        <textarea name="description" rows="3" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button type="button" onclick="closeModal('new-task-modal')" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+        <button type="submit" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Create</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const slug = '{{ workspace_slug }}';
+document.body.dataset.workspace = slug;
+let currentSession = null;
+let timerInterval = null;
+let allTasks = [];
+
+function showSection(name) {
+  ['active','tasks','timeline'].forEach(s => {
+    document.getElementById(`section-${s}`).classList.toggle('hidden', s !== name);
+  });
+  const titles = { active: ['Active Task','Your current work session'], tasks: ['My Tasks','All your tasks'], timeline: ['My Timeline','Your activity history'] };
+  document.getElementById('section-title').textContent = titles[name][0];
+  document.getElementById('section-sub').textContent = titles[name][1];
+  if (name === 'tasks') loadTasks();
+  if (name === 'timeline') { document.getElementById('my-timeline-date').value = new Date().toISOString().split('T')[0]; loadMyTimeline(); }
+}
+
+async function loadCurrentStatus() {
+  const data = await API.get(`/api/activity/${slug}/status/`);
+  if (!data) return;
+  currentSession = data.current_task;
+  updateActiveCard();
+}
+
+function updateActiveCard() {
+  const noSess = document.getElementById('no-session');
+  const hasSess = document.getElementById('has-session');
+  const badge = document.getElementById('current-task-badge');
+  if (!currentSession) {
+    noSess.classList.remove('hidden'); hasSess.classList.add('hidden');
+    badge.classList.add('hidden');
+    clearInterval(timerInterval);
+    return;
+  }
+  noSess.classList.add('hidden'); hasSess.classList.remove('hidden');
+  badge.classList.remove('hidden');
+  document.getElementById('badge-task-name').textContent = currentSession.title;
+  document.getElementById('active-task-title').textContent = currentSession.title;
+  document.getElementById('active-task-since').textContent = `Started ${new Date(currentSession.started_at).toLocaleTimeString()}`;
+  document.getElementById('active-completion').textContent = `${currentSession.completion}%`;
+  document.getElementById('active-progress-bar').style.width = `${currentSession.completion}%`;
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - new Date(currentSession.started_at)) / 1000);
+    const m = Math.floor(elapsed / 60).toString().padStart(2,'0');
+    const s = (elapsed % 60).toString().padStart(2,'0');
+    document.getElementById('active-timer').textContent = `${m}:${s}`;
+  }, 1000);
+}
+
+async function quickCreateAndStart() {
+  const input = document.getElementById('quick-task-input');
+  const title = input.value.trim();
+  if (!title) { toast('Enter a task title first', 'error'); return; }
+  const btn = document.querySelector('[onclick="quickCreateAndStart()"]');
+  btn.textContent = '...'; btn.disabled = true;
+  const task = await API.post(`/api/tasks/${slug}/`, { title });
+  if (!task || !task.id) { toast('Failed to create task', 'error'); btn.textContent = 'Start'; btn.disabled = false; return; }
+  const session = await API.post(`/api/activity/${slug}/start/`, { task_id: task.id });
+  btn.textContent = 'Start'; btn.disabled = false;
+  if (session && !session.error) {
+    toast(`Started: ${title}`, 'success');
+    input.value = '';
+    await loadCurrentStatus();
+  } else {
+    toast(session?.error || 'Could not start task', 'error');
+  }
+}
+
+async function loadTasks(statusFilter = '') {
+  const url = `/api/tasks/${slug}/${statusFilter ? '?status=' + statusFilter : ''}`;
+  const data = await API.get(url);
+  if (!data) return;
+  allTasks = data.results || data;
+  renderTasks(allTasks);
+}
+
+function renderTasks(tasks) {
+  const statusColors = { active: 'text-success border-success/30 bg-success/10', paused: 'text-warning border-warning/30 bg-warning/10', completed: 'text-muted border-border bg-surface' };
+  document.getElementById('task-list').innerHTML = tasks.map(t => `
+    <div class="bg-panel border border-border rounded-lg p-4 hover:border-accent/40 transition">
+      <div class="flex items-start justify-between">
+        <div class="flex-1 min-w-0">
+          <div class="text-white text-sm font-medium truncate">${t.title}</div>
+          ${t.description ? `<div class="text-muted text-xs mt-1 truncate">${t.description}</div>` : ''}
+        </div>
+        <div class="flex items-center gap-2 ml-3 flex-shrink-0">
+          <span class="text-xs px-2 py-0.5 rounded border ${statusColors[t.status] || 'text-muted border-border'}">${t.status}</span>
+          <span class="text-muted text-xs">${t.completion_percentage}%</span>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center gap-2">
+        <div class="flex-1 bg-surface rounded-full h-1">
+          <div class="bg-accent h-1 rounded-full" style="width:${t.completion_percentage}%"></div>
+        </div>
+        ${t.status !== 'completed' ? `
+        <button onclick="resumeTask(${t.id})" class="text-xs px-3 py-1 bg-accent/10 border border-accent/30 text-accent rounded hover:bg-accent hover:text-surface transition">
+          ${t.status === 'active' ? 'Active' : '▶ Resume'}
+        </button>` : ''}
+      </div>
+    </div>
+  `).join('') || '<div class="text-muted text-sm text-center py-8">No tasks yet</div>';
+}
+
+function filterTasks(status) {
+  document.querySelectorAll('.filter-btn').forEach(b => {
+    b.classList.toggle('border-accent', b.dataset.filter === status);
+    b.classList.toggle('text-white', b.dataset.filter === status);
+  });
+  loadTasks(status);
+}
+
+async function resumeTask(taskId) {
+  if (currentSession) {
+    const data = await API.get(`/api/tasks/${slug}/`);
+    const tasks = data?.results || data || [];
+    const sel = document.getElementById('switch-task-select');
+    sel.innerHTML = '<option value="">Select task...</option>' + tasks.filter(t => t.status !== 'active').map(t => `<option value="${t.id}">${t.title}</option>`).join('');
+    sel.value = taskId;
+    openModal('switch-modal');
+  } else {
+    const res = await API.post(`/api/activity/${slug}/start/`, { task_id: taskId });
+    if (res && !res.error) {
+      const task = allTasks.find(t => t.id === taskId);
+      toast(`Resumed: ${task?.title || 'task'}`, 'success');
+      await loadCurrentStatus();
+      showSection('active');
+    } else {
+      toast(res?.error || 'Could not resume task', 'error');
+    }
+  }
+}
+
+function openModal(id) {
+  const modal = document.getElementById(id);
+  const box = modal.querySelector('.modal-box');
+  modal.classList.remove('hidden');
+  box.style.animation = 'none';
+  requestAnimationFrame(() => { box.style.animation = ''; });
+}
+function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+function showSwitchModal() {
+  API.get(`/api/tasks/${slug}/`).then(data => {
+    const tasks = data.results || data;
+    const sel = document.getElementById('switch-task-select');
+    sel.innerHTML = '<option value="">Select task...</option>' + tasks.filter(t => t.status !== 'active').map(t => `<option value="${t.id}">${t.title}</option>`).join('');
+  });
+  openModal('switch-modal');
+}
+
+function showStopModal() { openModal('stop-modal'); }
+
+async function doSwitch() {
+  const nextId = document.getElementById('switch-task-select').value;
+  const completion = parseInt(document.getElementById('switch-completion').value);
+  const note = document.getElementById('switch-note').value;
+  if (!nextId) { toast('Select a task to switch to', 'error'); return; }
+  const res = await API.post(`/api/activity/${slug}/switch/`, { next_task_id: parseInt(nextId), completion_percentage: completion, note });
+  document.getElementById('switch-modal').classList.add('hidden');
+  if (res && !res.error) {
+    const name = document.getElementById('switch-task-select').selectedOptions[0]?.text || 'task';
+    toast(`Switched to: ${name}`, 'success');
+  } else {
+    toast(res?.error || 'Switch failed', 'error');
+  }
+  await loadCurrentStatus();
+}
+
+async function doStop() {
+  const completion = parseInt(document.getElementById('stop-completion').value);
+  const note = document.getElementById('stop-note').value;
+  const res = await API.post(`/api/activity/${slug}/stop/`, { completion_percentage: completion, note });
+  document.getElementById('stop-modal').classList.add('hidden');
+  if (res && !res.error) {
+    toast('Session paused', 'info');
+    currentSession = null;
+    updateActiveCard();
+  } else {
+    toast(res?.error || 'Could not pause session', 'error');
+  }
+}
+
+async function loadMyTimeline() {
+  const date = document.getElementById('my-timeline-date').value;
+  const data = await API.get(`/api/activity/${slug}/timeline/?date=${date}`);
+  if (!data) return;
+  const sessions = data.results || data;
+  const container = document.getElementById('my-timeline');
+  if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No activity for this date.</div>'; return; }
+  container.innerHTML = sessions.map(s => {
+    const dur = s.duration_seconds;
+    const mins = Math.floor(dur / 60);
+    const ended = s.ended_at ? new Date(s.ended_at).toLocaleTimeString() : 'ongoing';
+    return `
+    <div class="relative flex gap-4">
+      <div class="timeline-dot ${s.ended_at ? 'bg-surface' : 'bg-accent'} border-2 ${s.ended_at ? 'border-border' : 'border-accent'} z-10"></div>
+      <div class="flex-1 bg-panel border border-border rounded-lg p-3 mb-2">
+        <div class="flex items-center justify-between mb-1">
+          <span class="text-white text-sm font-medium">${s.task_title}</span>
+          <span class="text-xs ${s.ended_at ? 'text-muted' : 'text-accent'}">${s.ended_at ? `${mins}m` : '● active'}</span>
+        </div>
+        <div class="text-muted text-xs">${new Date(s.started_at).toLocaleTimeString()} → ${ended}</div>
+        ${s.completion_at_end !== null ? `<div class="text-success text-xs mt-1">${s.completion_at_end}% complete</div>` : ''}
+        ${s.switch_note ? `<div class="mt-1 text-xs text-muted italic border-l-2 border-border pl-2">${s.switch_note}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('new-task-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const payload = Object.fromEntries(fd);
+  const submitBtn = e.target.querySelector('[type="submit"]');
+  submitBtn.textContent = 'Creating...'; submitBtn.disabled = true;
+  const res = await API.post(`/api/tasks/${slug}/`, payload);
+  submitBtn.textContent = 'Create'; submitBtn.disabled = false;
+  if (res && res.id) {
+    toast(`Task created: ${res.title}`, 'success');
+    document.getElementById('new-task-modal').classList.add('hidden');
+    e.target.reset();
+    loadTasks();
+  } else {
+    toast(res?.title?.[0] || res?.error || 'Failed to create task', 'error');
+  }
+});
+
+API.get(`/api/workspaces/${slug}/`).then(d => { if (d) document.getElementById('ws-name').textContent = d.name; });
+loadCurrentStatus();
+</script>
+{% endblock %}

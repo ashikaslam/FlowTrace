@@ -1,0 +1,62 @@
+{% extends "base/layout.html" %}
+{% block title %}Sign In — FlowTrace{% endblock %}
+{% block body %}
+<div class="min-h-screen flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <a href="/" class="inline-flex items-center gap-2 text-white font-semibold text-lg">
+        <div class="w-7 h-7 rounded bg-accent flex items-center justify-center">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0d1117" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        </div>
+        FlowTrace
+      </a>
+      <p class="text-muted text-sm mt-2">
+        Workspace: <span class="text-accent font-mono">{{ workspace_slug }}</span>
+      </p>
+    </div>
+
+    <div class="bg-panel border border-border rounded-xl p-8">
+      <div id="err" class="hidden mb-4 text-danger text-xs bg-danger/10 border border-danger/30 rounded p-3"></div>
+      <form id="login-form" class="space-y-4">
+        <input type="hidden" name="workspace_slug" value="{{ workspace_slug }}" />
+        <div>
+          <label class="text-muted text-xs mb-1 block">Username</label>
+          <input name="username" autofocus
+            class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+        </div>
+        <div>
+          <label class="text-muted text-xs mb-1 block">Password</label>
+          <input name="password" type="password"
+            class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+        </div>
+        <button type="submit" class="w-full py-2.5 bg-accent text-surface font-medium rounded-md hover:bg-blue-400 transition text-sm">
+          Sign In
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const errEl = document.getElementById('err');
+  errEl.classList.add('hidden');
+  const res = await fetch('/api/auth/login/', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(Object.fromEntries(fd)),
+  });
+  const data = await res.json();
+  if (!res.ok) { errEl.textContent = data.detail || JSON.stringify(data); errEl.classList.remove('hidden'); return; }
+  localStorage.setItem('access_token', data.access);
+  localStorage.setItem('refresh_token', data.refresh);
+  localStorage.setItem('workspace_slug', data.workspace);
+  localStorage.setItem('role', data.role);
+  const slug = data.workspace;
+  window.location.href = data.role === 'manager' ? `/dashboard/${slug}/` : `/dashboard/${slug}/dev/`;
+});
+</script>
+{% endblock %}

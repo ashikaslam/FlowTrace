@@ -1,0 +1,22 @@
+{% extends "base/layout.html" %}
+{% block title %}Tasks — FlowTrace{% endblock %}
+{% block body %}
+<div data-workspace="{{ workspace_slug }}" class="min-h-screen p-8">
+  <h1 class="text-white text-xl font-semibold mb-6">Tasks</h1>
+  <div id="task-list" class="space-y-2"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const slug = '{{ workspace_slug }}';
+API.get(`/api/tasks/${slug}/`).then(data => {
+  const tasks = data.results || data;
+  document.getElementById('task-list').innerHTML = tasks.map(t => `
+    <a href="/tasks/${slug}/${t.id}/" class="block bg-panel border border-border rounded-lg p-4 hover:border-accent/40 transition">
+      <div class="text-white text-sm font-medium">${t.title}</div>
+      <div class="text-muted text-xs mt-1">${t.status} · ${t.completion_percentage}%</div>
+    </a>
+  `).join('');
+});
+</script>
+{% endblock %}

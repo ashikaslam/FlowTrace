@@ -1,0 +1,45 @@
+{% extends "base/layout.html" %}
+{% block title %}Activity Timeline — FlowTrace{% endblock %}
+{% block body %}
+<div data-workspace="{{ workspace_slug }}" class="min-h-screen p-8 max-w-3xl mx-auto">
+  <h1 class="text-white text-xl font-semibold mb-2">Activity Timeline</h1>
+  <p class="text-muted text-sm mb-6">Your complete workflow history</p>
+  <div class="flex items-center gap-3 mb-6">
+    <input type="date" id="date-filter" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent" />
+    <button onclick="loadTimeline()" class="px-4 py-1.5 bg-accent text-surface text-sm rounded-md hover:bg-blue-400 transition">Load</button>
+  </div>
+  <div id="timeline" class="timeline-line pl-8 space-y-4"></div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const slug = '{{ workspace_slug }}';
+document.getElementById('date-filter').value = new Date().toISOString().split('T')[0];
+
+async function loadTimeline() {
+  const date = document.getElementById('date-filter').value;
+  const data = await API.get(`/api/activity/${slug}/timeline/?date=${date}`);
+  const sessions = data.results || data;
+  const container = document.getElementById('timeline');
+  if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No activity for this date.</div>'; return; }
+  container.innerHTML = sessions.map(s => {
+    const mins = Math.floor(s.duration_seconds / 60);
+    return `
+    <div class="relative flex gap-4">
+      <div class="timeline-dot ${s.ended_at ? 'bg-surface border-border' : 'bg-accent border-accent'} border-2 z-10"></div>
+      <div class="flex-1 bg-panel border border-border rounded-lg p-4 mb-2">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-white font-medium">${s.task_title}</span>
+          <span class="text-xs ${s.ended_at ? 'text-muted' : 'text-accent'}">${s.ended_at ? mins + 'm' : '● active'}</span>
+        </div>
+        <div class="text-muted text-xs">${new Date(s.started_at).toLocaleTimeString()} → ${s.ended_at ? new Date(s.ended_at).toLocaleTimeString() : 'now'}</div>
+        ${s.completion_at_end !== null ? `<div class="text-success text-xs mt-1">${s.completion_at_end}% complete</div>` : ''}
+        ${s.switch_note ? `<div class="mt-2 text-xs text-muted italic border-l-2 border-border pl-2">${s.switch_note}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+loadTimeline();
+</script>
+{% endblock %}
