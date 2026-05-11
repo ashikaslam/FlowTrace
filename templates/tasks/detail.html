@@ -81,6 +81,26 @@
     </div>
   </div>
 </div>
+
+<!-- Rejected re-request confirm modal -->
+<div id="reconfirm-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[60] px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-sm">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-9 h-9 rounded-full bg-danger/10 border border-danger/30 flex items-center justify-center flex-shrink-0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f85149" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div>
+        <div class="text-white text-sm font-semibold">Previously Rejected</div>
+        <div class="text-muted text-xs mt-0.5" id="reconfirm-subtitle"></div>
+      </div>
+    </div>
+    <p class="text-muted text-xs leading-relaxed mb-5" id="reconfirm-body"></p>
+    <div class="flex gap-2">
+      <button onclick="closeReconfirm(false)" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="closeReconfirm(true)" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Send Anyway</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
@@ -181,45 +201,70 @@ async function loadCollabLog() {
 }
 
 // Collaboration modal
+let _memberStatuses = {};
+
 async function openCollabModal() {
   selectedTargets = [];
   renderSelectedTargets();
   document.getElementById('collab-message').value = '';
-  // Load all workspace members immediately
-  const results = await API.get(`/api/activity/${slug}/collab/members/?q=`);
   const list = document.getElementById('collab-members-list');
-  if (!results || !results.length) {
-    list.innerHTML = '<div class="px-3 py-2 text-muted text-xs">No other developers in this workspace</div>';
-  } else {
-    renderMembersList(results);
-  }
+  list.innerHTML = '<div class="px-3 py-2 text-muted text-xs">Loading...</div>';
   const modal = document.getElementById('collab-modal');
   const box = modal.querySelector('.modal-box');
   modal.classList.remove('hidden');
   box.style.animation = 'none';
   requestAnimationFrame(() => { box.style.animation = ''; });
+  // Fetch members and their collab status in parallel
+  const [members, statuses] = await Promise.all([
+    API.get(`/api/activity/${slug}/collab/members/?q=`),
+    API.get(`/api/activity/${slug}/collab/tasks/${taskId}/member-status/`),
+  ]);
+  _memberStatuses = statuses || {};
+  if (!members || !members.length) {
+    list.innerHTML = '<div class="px-3 py-2 text-muted text-xs">No other developers in this workspace</div>';
+  } else {
+    renderMembersList(members);
+  }
 }
 
 function renderMembersList(members) {
   const list = document.getElementById('collab-members-list');
+  const statusMeta = {
+    collaborating: { label: 'Collaborating', cls: 'text-success', blocked: true },
+    pending:       { label: 'Request Pending', cls: 'text-warning', blocked: true },
+    rejected:      { label: 'Previously Rejected', cls: 'text-danger', blocked: false },
+    none:          { label: '', cls: '', blocked: false },
+  };
   const available = members.filter(r => !selectedTargets.find(t => t.username === r.username));
   if (!available.length) {
     list.innerHTML = '<div class="px-3 py-2 text-muted text-xs">All members already selected</div>';
     return;
   }
-  list.innerHTML = available.map(r => `
-    <div class="px-3 py-2 text-sm text-white hover:bg-panel cursor-pointer flex items-center gap-3 border-b border-border/40 last:border-0"
-         onclick="selectTarget('${r.username}', '${r.full_name}')">
-      <div class="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-accent text-xs font-semibold flex-shrink-0">
-        ${r.username.charAt(0).toUpperCase()}
-      </div>
+  list.innerHTML = available.map(r => {
+    const st = _memberStatuses[r.username] || 'none';
+    const meta = statusMeta[st];
+    const badge = meta.label ? `<span class="text-xs ${meta.cls}">${meta.label}</span>` : '';
+    const clickHandler = meta.blocked
+      ? `onclick="blockNotice('${r.username}', '${st}')"`
+      : `onclick="selectTarget('${r.username}', '${r.full_name}')"`;
+    return `
+    <div class="px-3 py-2 text-sm hover:bg-panel cursor-pointer flex items-center gap-3 border-b border-border/40 last:border-0 ${meta.blocked ? 'opacity-60' : 'text-white'}" ${clickHandler}>
+      ${avatar(r.avatar_url || '', r.username, 'w-7 h-7', 'text-xs')}
       <div class="flex-1 min-w-0">
         <div class="text-white text-xs font-medium">@${r.username}</div>
         <div class="text-muted text-xs truncate">${r.full_name}</div>
       </div>
-      <span class="text-muted text-xs">+ Select</span>
-    </div>
-  `).join('');
+      ${badge}
+    </div>`;
+  }).join('');
+}
+
+function blockNotice(username, status) {
+  if (status === 'collaborating') {
+    toast(`@${username} is already collaborating on this task`, 'info');
+  } else if (status === 'pending') {
+    toast(`A request to @${username} is already pending`, 'info');
+  }
 }
 
 function closeCollabModal() {
@@ -259,8 +304,36 @@ function renderSelectedTargets() {
   `).join('') || '<span class="text-muted text-xs">No developers selected</span>';
 }
 
+let _reconfirmResolve = null;
+
+function closeReconfirm(confirmed) {
+  document.getElementById('reconfirm-modal').classList.add('hidden');
+  if (_reconfirmResolve) { _reconfirmResolve(confirmed); _reconfirmResolve = null; }
+}
+
+function showReconfirm(names) {
+  return new Promise(resolve => {
+    _reconfirmResolve = resolve;
+    const plural = names.length > 1;
+    document.getElementById('reconfirm-subtitle').textContent =
+      plural ? `${names.map(n => '@'+n).join(', ')} rejected your request` : `@${names[0]} rejected your request`;
+    document.getElementById('reconfirm-body').textContent =
+      `${plural ? 'These developers have' : 'This developer has'} previously rejected your collaboration request on this task. Do you want to send a new request?`;
+    const modal = document.getElementById('reconfirm-modal');
+    const box = modal.querySelector('.modal-box');
+    modal.classList.remove('hidden');
+    box.style.animation = 'none';
+    requestAnimationFrame(() => { box.style.animation = ''; });
+  });
+}
+
 async function sendCollabRequests() {
   if (!selectedTargets.length) { toast('Select at least one developer', 'error'); return; }
+  const rejected = selectedTargets.filter(t => (_memberStatuses[t.username] || 'none') === 'rejected');
+  if (rejected.length) {
+    const confirmed = await showReconfirm(rejected.map(t => t.username));
+    if (!confirmed) return;
+  }
   const message = document.getElementById('collab-message').value.trim();
   let sent = 0;
   for (const t of selectedTargets) {

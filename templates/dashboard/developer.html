@@ -13,6 +13,10 @@
         <span class="text-white text-sm font-semibold">FlowTrace</span>
       </div>
       <div class="mt-2 text-xs text-muted font-mono" id="ws-name">Loading...</div>
+      <div class="mt-3 flex items-center gap-2">
+        <div id="sidebar-avatar" onclick="openAvatarPicker(onDevAvatarUploaded)" class="cursor-pointer w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs text-accent font-mono">?</div>
+        <span id="sidebar-username" class="text-xs text-muted font-mono"></span>
+      </div>
     </div>
     <nav class="flex-1 p-3 space-y-1">
       <a href="#" onclick="showSection('active')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
@@ -94,10 +98,13 @@
 
       <!-- Quick start -->
       <div class="bg-panel border border-border rounded-xl p-5">
-        <div class="text-muted text-xs mb-3 uppercase tracking-wider">Quick Start Task</div>
+        <div class="text-muted text-xs mb-3 uppercase tracking-wider">Quick Task</div>
         <div class="flex gap-2">
           <input id="quick-task-input" placeholder="Task title..." class="flex-1 bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
-          <button onclick="quickCreateAndStart()" class="px-4 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">
+          <button onclick="quickCreate()" class="px-3 py-2 bg-surface border border-border text-white text-sm rounded-md hover:border-accent transition">
+            Create
+          </button>
+          <button onclick="quickCreateAndStart()" class="px-3 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">
             Start
           </button>
         </div>
@@ -277,6 +284,21 @@ function updateActiveCard() {
   }, 1000);
 }
 
+async function quickCreate() {
+  const input = document.getElementById('quick-task-input');
+  const title = input.value.trim();
+  if (!title) { toast('Enter a task title first', 'error'); return; }
+  const task = await API.post(`/api/tasks/${slug}/`, { title });
+  if (task && task.id) {
+    toast(`Task created: ${title}`, 'success');
+    input.value = '';
+    allTasks.unshift(task);
+    if (document.getElementById('section-tasks').classList.contains('hidden') === false) renderTasks(allTasks);
+  } else {
+    toast(task?.title?.[0] || 'Failed to create task', 'error');
+  }
+}
+
 async function quickCreateAndStart() {
   const input = document.getElementById('quick-task-input');
   const title = input.value.trim();
@@ -297,7 +319,7 @@ async function quickCreateAndStart() {
 }
 
 async function loadTasks(statusFilter = '') {
-  const url = `/api/tasks/${slug}/${statusFilter ? '?status=' + statusFilter : ''}`;
+  const url = `/api/tasks/${slug}/?page_size=200${statusFilter ? '&status=' + statusFilter : ''}`;
   const data = await API.get(url);
   if (!data) return;
   allTasks = data.results || data;
@@ -323,10 +345,10 @@ function renderTasks(tasks) {
           <div class="bg-accent h-1 rounded-full" style="width:${t.completion_percentage}%"></div>
         </div>
         <a href="/tasks/${slug}/${t.id}/" class="text-xs px-3 py-1 border border-border text-muted rounded hover:text-white hover:border-accent/40 transition">View</a>
-        ${t.status !== 'completed' ? `
-        <button onclick="resumeTask(${t.id})" class="text-xs px-3 py-1 bg-accent/10 border border-accent/30 text-accent rounded hover:bg-accent hover:text-surface transition">
-          ${t.status === 'active' ? 'Active' : '▶ Resume'}
-        </button>` : ''}
+        ${t.status === 'completed' ? '' : t.status === 'active'
+          ? `<button onclick="showStopModal()" class="text-xs px-3 py-1 bg-warning/10 border border-warning/30 text-warning rounded hover:bg-warning hover:text-surface transition">⏸ Pause</button>`
+          : `<button onclick="resumeTask(${t.id})" class="text-xs px-3 py-1 bg-accent/10 border border-accent/30 text-accent rounded hover:bg-accent hover:text-surface transition">&#9654; Resume</button>`
+        }
       </div>
     </div>
   `).join('') || '<div class="text-muted text-sm text-center py-8">No tasks yet</div>';
@@ -342,10 +364,14 @@ function filterTasks(status) {
 
 async function resumeTask(taskId) {
   if (currentSession) {
-    const data = await API.get(`/api/tasks/${slug}/`);
-    const tasks = data?.results || data || [];
+    // Use in-memory tasks, refresh if needed
+    if (!allTasks.length) {
+      const data = await API.get(`/api/tasks/${slug}/?page_size=200`);
+      allTasks = data?.results || data || [];
+    }
     const sel = document.getElementById('switch-task-select');
-    sel.innerHTML = '<option value="">Select task...</option>' + tasks.filter(t => t.status !== 'active').map(t => `<option value="${t.id}">${t.title}</option>`).join('');
+    const opts = allTasks.filter(t => t.status !== 'active' && t.status !== 'completed');
+    sel.innerHTML = '<option value="">Select task...</option>' + opts.map(t => `<option value="${t.id}">${t.title} (${t.status})</option>`).join('');
     sel.value = taskId;
     openModal('switch-modal');
   } else {
@@ -371,12 +397,23 @@ function openModal(id) {
 function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
 
 function showSwitchModal() {
-  API.get(`/api/tasks/${slug}/`).then(data => {
-    const tasks = data.results || data;
+  // Use all tasks already in memory; if empty, fetch first
+  const populate = (tasks) => {
     const sel = document.getElementById('switch-task-select');
-    sel.innerHTML = '<option value="">Select task...</option>' + tasks.filter(t => t.status !== 'active').map(t => `<option value="${t.id}">${t.title}</option>`).join('');
-  });
-  openModal('switch-modal');
+    const opts = tasks.filter(t => t.status !== 'active' && t.status !== 'completed');
+    sel.innerHTML = '<option value="">Select task...</option>' + opts.map(t => `<option value="${t.id}">${t.title} (${t.status})</option>`).join('');
+    if (!opts.length) sel.innerHTML = '<option value="">No paused tasks available</option>';
+  };
+  if (allTasks.length) {
+    populate(allTasks);
+    openModal('switch-modal');
+  } else {
+    API.get(`/api/tasks/${slug}/?page_size=200`).then(data => {
+      allTasks = data.results || data;
+      populate(allTasks);
+    });
+    openModal('switch-modal');
+  }
 }
 
 function showStopModal() { openModal('stop-modal'); }
@@ -510,11 +547,14 @@ async function loadCollabRequests() {
   el.innerHTML = requests.map(r => `
     <div class="bg-panel border border-border rounded-lg p-4" id="collab-req-${r.id}">
       <div class="flex items-start justify-between gap-3">
-        <div class="flex-1 min-w-0">
-          <div class="text-white text-sm font-medium">@${r.requester_username} <span class="text-muted font-normal">wants to collaborate</span></div>
-          <div class="text-accent text-xs mt-1 truncate">&#128203; ${r.task_title}</div>
-          ${r.message ? `<div class="text-muted text-xs mt-1 italic">&ldquo;${r.message}&rdquo;</div>` : ''}
-          <div class="text-muted text-xs mt-1">${new Date(r.created_at).toLocaleString()}</div>
+        <div class="flex items-start gap-3 flex-1 min-w-0">
+          ${avatar(r.requester_avatar || '', r.requester_username, 'w-8 h-8', 'text-xs')}
+          <div class="flex-1 min-w-0">
+            <div class="text-white text-sm font-medium">@${r.requester_username} <span class="text-muted font-normal">wants to collaborate</span></div>
+            <div class="text-accent text-xs mt-1 truncate">&#128203; ${r.task_title}</div>
+            ${r.message ? `<div class="text-muted text-xs mt-1 italic">&ldquo;${r.message}&rdquo;</div>` : ''}
+            <div class="text-muted text-xs mt-1">${new Date(r.created_at).toLocaleString()}</div>
+          </div>
         </div>
         <div class="flex gap-2 flex-shrink-0">
           <button onclick="respondCollab(${r.id}, 'reject')" class="px-3 py-1.5 border border-border text-muted text-xs rounded-md hover:border-danger hover:text-danger transition">Reject</button>
@@ -531,6 +571,7 @@ async function loadCollabHistory() {
   const el = document.getElementById('collab-history-list');
   if (!data.length) { el.innerHTML = '<div class="text-muted text-sm text-center py-8">No collaboration history yet</div>'; return; }
   const statusStyles = {
+    pending: 'text-warning border-warning/30 bg-warning/10',
     accepted: 'text-success border-success/30 bg-success/10',
     rejected: 'text-danger border-danger/30 bg-danger/10',
     cancelled: 'text-muted border-border bg-surface',
@@ -539,8 +580,11 @@ async function loadCollabHistory() {
   el.innerHTML = data.map(r => {
     const isSent = r.direction === 'sent';
     const style = statusStyles[r.status] || 'text-muted border-border bg-surface';
+    const cancelBtn = (isSent && r.status === 'pending')
+      ? `<button onclick="cancelCollabRequest(${r.id})" class="mt-2 px-3 py-1 border border-border text-muted text-xs rounded-md hover:border-danger hover:text-danger transition">Cancel Request</button>`
+      : '';
     return `
-    <div class="bg-panel border border-border rounded-lg p-4">
+    <div class="bg-panel border border-border rounded-lg p-4" id="hist-req-${r.id}">
       <div class="flex items-start justify-between gap-3">
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
@@ -551,11 +595,22 @@ async function loadCollabHistory() {
           <div class="text-accent text-xs mt-1 truncate">&#128203; ${r.task_title}</div>
           ${r.message ? `<div class="text-muted text-xs mt-1 italic">&ldquo;${r.message}&rdquo;</div>` : ''}
           <div class="text-muted text-xs mt-1">${new Date(r.created_at).toLocaleString()}</div>
+          ${cancelBtn}
         </div>
         <span class="flex-shrink-0 text-xs px-2 py-0.5 rounded border ${style}">${r.status}</span>
       </div>
     </div>`;
   }).join('');
+}
+
+async function cancelCollabRequest(requestId) {
+  const res = await API.post(`/api/activity/${slug}/collab/${requestId}/cancel/`, {});
+  if (res && res.status === 'cancelled') {
+    toast('Request cancelled', 'info');
+    loadCollabHistory();
+  } else {
+    toast(res?.error || 'Failed to cancel', 'error');
+  }
 }
 
 async function respondCollab(requestId, action) {
@@ -570,6 +625,22 @@ async function respondCollab(requestId, action) {
 
 API.get(`/api/workspaces/${slug}/`).then(d => { if (d) document.getElementById('ws-name').textContent = d.name; });
 loadCurrentStatus();
+API.get(`/api/auth/me/`).then(data => {
+  if (!data) return;
+  const el = document.getElementById('sidebar-avatar');
+  const unEl = document.getElementById('sidebar-username');
+  if (data.avatar_url) {
+    el.outerHTML = `<img id="sidebar-avatar" src="${data.avatar_url}" class="w-8 h-8 rounded-full object-cover border border-border cursor-pointer" onclick="openAvatarPicker(onDevAvatarUploaded)" />`;
+  } else {
+    el.textContent = (data.full_name || '?')[0].toUpperCase();
+    el.onclick = () => openAvatarPicker(onDevAvatarUploaded);
+  }
+  if (unEl) unEl.textContent = data.full_name || '';
+});
+function onDevAvatarUploaded(url) {
+  const el = document.getElementById('sidebar-avatar');
+  if (el) el.outerHTML = `<img id="sidebar-avatar" src="${url}" class="w-8 h-8 rounded-full object-cover border border-border cursor-pointer" onclick="openAvatarPicker(onDevAvatarUploaded)" />`;
+}
 API.get(`/api/activity/${slug}/collab/incoming/`).then(data => {
   const count = (data?.results || data || []).length;
   const badge = document.getElementById('collab-badge');

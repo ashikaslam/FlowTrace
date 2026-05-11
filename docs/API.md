@@ -58,7 +58,41 @@ Refresh access token.
 ---
 
 ### GET /api/auth/me/
-Get current user profile.
+Get current user profile. Returns `id`, `email`, `full_name`, `avatar_url`, `created_at`.
+
+---
+
+### PATCH /api/auth/{workspace_slug}/profile/update/
+Update the current user's profile. All fields optional.
+
+**Request:**
+```json
+{ "full_name": "Jane Smith", "email": "jane@new.com", "username": "jane_new" }
+```
+
+**Response:** `200`
+```json
+{ "full_name": "Jane Smith", "email": "jane@new.com" }
+```
+
+**Errors:**
+- `400` — Email already in use, or username already taken in this workspace
+
+---
+
+### POST /api/auth/avatar/upload/
+Upload a profile picture. Image is stored on ImgBB and the public URL is saved to the user.
+
+**Request:** `multipart/form-data` with `avatar` field (image file, max 5 MB).
+
+**Response:** `200`
+```json
+{ "avatar_url": "https://i.ibb.co/..." }
+```
+
+**Errors:**
+- `400` — No file, file exceeds 5 MB, or non-image MIME type
+- `502` — ImgBB upload failed
 
 ---
 
@@ -244,19 +278,45 @@ My current status.
 All collaboration endpoints are workspace-scoped. Cross-workspace collaboration is structurally impossible — member lookups always filter by `workspace__slug`.
 
 ### GET /api/activity/{workspace_slug}/collab/members/?q=
-List all workspace members available for collaboration. Returns all members when `q` is empty, or filters by username/full name when provided.
+List all workspace members available for collaboration. Returns all members when `q` is empty, or filters by username/full name when provided. Now includes `avatar_url`.
 
 **Query params:** `?q=john` (optional)
 
 **Response:**
 ```json
 [
-  { "username": "john", "full_name": "John Smith" },
-  { "username": "mike", "full_name": "Mike Lee" }
+  { "username": "john", "full_name": "John Smith", "avatar_url": "https://i.ibb.co/..." },
+  { "username": "mike", "full_name": "Mike Lee", "avatar_url": "" }
 ]
 ```
 
 Returns up to 50 results. Never includes the requesting developer themselves.
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/tasks/{task_id}/member-status/
+Returns the current collaboration status of every workspace member for a specific task, from the perspective of the requesting developer.
+
+**Response:**
+```json
+{
+  "john": "collaborating",
+  "mike": "pending",
+  "sarah": "rejected",
+  "alex": "none"
+}
+```
+
+**Status values:**
+
+| Value | Meaning |
+|-------|---------|
+| `collaborating` | Member is an active `TaskCollaborator` on this task |
+| `pending` | Requester has a pending outgoing request to this member |
+| `rejected` | Member previously rejected the requester's request |
+| `none` | No active relationship — request can be sent freely |
+
+Used by the collaboration modal to show status badges and block/warn before sending duplicate requests.
 
 ---
 
@@ -299,7 +359,7 @@ List all pending collaboration requests received by the current developer.
 ---
 
 ### GET /api/activity/{workspace_slug}/collab/history/
-All past collaboration requests involving the current developer (both sent and received, all non-pending statuses), sorted newest first.
+All collaboration requests involving the current developer (both sent and received, **all statuses including pending**), sorted newest first.
 
 **Response:**
 ```json
@@ -310,10 +370,10 @@ All past collaboration requests involving the current developer (both sent and r
     "other_username": "john",
     "task_id": 5,
     "task_title": "Fix payment API",
-    "status": "accepted",
+    "status": "pending",
     "message": "Need help with the payment logic",
     "created_at": "...",
-    "responded_at": "..."
+    "responded_at": null
   },
   {
     "id": 2,
@@ -330,6 +390,8 @@ All past collaboration requests involving the current developer (both sent and r
 ```
 
 `direction`: `sent` = current developer sent the request, `received` = they received it.
+
+Note: received requests with `pending` status are excluded here since they appear in the `incoming/` endpoint instead.
 
 ---
 
@@ -452,6 +514,17 @@ Mark a mention as read.
 Autocomplete @mention suggestions. Returns list of matching usernames.
 
 ---
+
+## Request Size Limits
+
+All requests pass through `RequestSizeLimitMiddleware`:
+
+| Content type | Max size | Error |
+|---|---|---|
+| `multipart/form-data` (file uploads) | 7 MB | `413` |
+| JSON / everything else | 512 KB | `413` |
+
+The largest realistic JSON payload in FlowTrace is a task with a long description (~5 KB). 512 KB is intentionally generous.
 
 ## Error Responses
 

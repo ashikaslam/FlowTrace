@@ -17,7 +17,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "email", "full_name", "created_at"]
+        fields = ["id", "email", "full_name", "avatar_url", "created_at"]
 
 
 class WorkspaceTokenSerializer(TokenObtainPairSerializer):
@@ -66,10 +66,23 @@ class WorkspaceTokenSerializer(TokenObtainPairSerializer):
 
 class MembershipSerializer(serializers.ModelSerializer):
     user = UserSerializer(read_only=True)
+    avatar_url = serializers.CharField(source="user.avatar_url", read_only=True)
 
     class Meta:
         model = WorkspaceMembership
-        fields = ["id", "user", "role", "username", "is_active", "joined_at"]
+        fields = ["id", "user", "role", "username", "avatar_url", "is_active", "joined_at"]
+
+
+class UpdateProfileSerializer(serializers.Serializer):
+    full_name = serializers.CharField(required=False)
+    email = serializers.EmailField(required=False)
+    username = serializers.CharField(max_length=50, required=False)
+
+    def validate_email(self, value):
+        user = self.context["request"].user
+        if User.objects.filter(email=value).exclude(pk=user.pk).exists():
+            raise serializers.ValidationError("Email already in use.")
+        return value
 
 
 class CreateDeveloperSerializer(serializers.Serializer):

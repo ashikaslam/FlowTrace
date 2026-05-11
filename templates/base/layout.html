@@ -57,6 +57,22 @@
 <body class="min-h-screen bg-surface">
   {% block body %}{% endblock %}
   <div id="toast-container"></div>
+
+  <!-- Avatar Crop Modal -->
+  <div id="avatar-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[100] px-4">
+    <div class="bg-panel border border-border rounded-xl p-6 w-full max-w-sm">
+      <h3 class="text-white font-semibold mb-4 text-sm">Crop Profile Picture</h3>
+      <div class="relative mx-auto mb-4" style="width:240px;height:240px;">
+        <canvas id="crop-canvas" width="240" height="240" class="rounded-full border-2 border-accent cursor-crosshair"></canvas>
+      </div>
+      <input type="range" id="crop-zoom" min="1" max="3" step="0.01" value="1" class="w-full accent-blue-500 mb-4" />
+      <div class="flex gap-2">
+        <button onclick="closeCropModal()" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+        <button onclick="confirmCrop()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Upload</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     const API = {
       async request(method, url, data = null) {
@@ -83,6 +99,91 @@
       setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 220); }, 3200);
     }
     const workspace_slug = document.body.dataset.workspace || '';
+
+    // ── Avatar helpers ──────────────────────────────────────────
+    function avatar(url, username, size = 'w-8 h-8', textSize = 'text-xs') {
+      if (url) {
+        return `<img src="${url}" class="${size} rounded-full object-cover border border-border flex-shrink-0" alt="${username}" />`;
+      }
+      return `<div class="${size} rounded-full bg-surface border border-border flex items-center justify-center ${textSize} text-accent font-mono flex-shrink-0">${(username||'?')[0].toUpperCase()}</div>`;
+    }
+
+    // ── Avatar crop & upload ────────────────────────────────────
+    let _cropImg = null, _cropZoom = 1, _cropOffset = {x:0,y:0}, _cropDrag = null, _cropCallback = null;
+
+    function openAvatarPicker(onUpload) {
+      _cropCallback = onUpload;
+      const inp = document.createElement('input');
+      inp.type = 'file'; inp.accept = 'image/*';
+      inp.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) { toast('Image must be 5 MB or less', 'error'); return; }
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            _cropImg = img; _cropZoom = 1; _cropOffset = {x:0,y:0};
+            document.getElementById('crop-zoom').value = 1;
+            document.getElementById('avatar-modal').classList.remove('hidden');
+            drawCrop();
+          };
+          img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+      inp.click();
+    }
+
+    function drawCrop() {
+      const canvas = document.getElementById('crop-canvas');
+      const ctx = canvas.getContext('2d');
+      const S = 240;
+      ctx.clearRect(0,0,S,S);
+      ctx.save();
+      ctx.beginPath(); ctx.arc(S/2,S/2,S/2,0,Math.PI*2); ctx.clip();
+      const scale = _cropZoom;
+      const iw = _cropImg.width * scale, ih = _cropImg.height * scale;
+      const x = S/2 - iw/2 + _cropOffset.x;
+      const y = S/2 - ih/2 + _cropOffset.y;
+      ctx.drawImage(_cropImg, x, y, iw, ih);
+      ctx.restore();
+    }
+
+    document.getElementById('crop-zoom').addEventListener('input', (e) => { _cropZoom = parseFloat(e.target.value); drawCrop(); });
+
+    const cropCanvas = document.getElementById('crop-canvas');
+    cropCanvas.addEventListener('mousedown', (e) => { _cropDrag = {sx: e.clientX - _cropOffset.x, sy: e.clientY - _cropOffset.y}; });
+    cropCanvas.addEventListener('mousemove', (e) => { if (!_cropDrag) return; _cropOffset.x = e.clientX - _cropDrag.sx; _cropOffset.y = e.clientY - _cropDrag.sy; drawCrop(); });
+    cropCanvas.addEventListener('mouseup', () => { _cropDrag = null; });
+    cropCanvas.addEventListener('mouseleave', () => { _cropDrag = null; });
+    cropCanvas.addEventListener('touchstart', (e) => { const t=e.touches[0]; _cropDrag={sx:t.clientX-_cropOffset.x,sy:t.clientY-_cropOffset.y}; }, {passive:true});
+    cropCanvas.addEventListener('touchmove', (e) => { if(!_cropDrag)return; const t=e.touches[0]; _cropOffset.x=t.clientX-_cropDrag.sx; _cropOffset.y=t.clientY-_cropDrag.sy; drawCrop(); }, {passive:true});
+    cropCanvas.addEventListener('touchend', () => { _cropDrag=null; });
+
+    function closeCropModal() { document.getElementById('avatar-modal').classList.add('hidden'); }
+
+    async function confirmCrop() {
+      const canvas = document.getElementById('crop-canvas');
+      canvas.toBlob(async (blob) => {
+        const fd = new FormData();
+        fd.append('avatar', blob, 'avatar.png');
+        const token = localStorage.getItem('access_token');
+        const res = await fetch('/api/auth/avatar/upload/', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        });
+        const data = await res.json();
+        closeCropModal();
+        if (data.avatar_url) {
+          toast('Profile picture updated', 'success');
+          if (_cropCallback) _cropCallback(data.avatar_url);
+        } else {
+          toast(data.error || 'Upload failed', 'error');
+        }
+      }, 'image/png');
+    }
   </script>
   {% block scripts %}{% endblock %}
 </body>
