@@ -30,6 +30,9 @@
       <a href="#" onclick="showSection('collaborations')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
         <span>🤝</span> Collaborations
       </a>
+      <a href="#" onclick="showSection('profile')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>&#9881;</span> My Profile
+      </a>
     </nav>
     <div class="p-3 border-t border-border">
       <a href="/logout/" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-danger transition">
@@ -113,7 +116,7 @@
       <div class="max-w-md">
         <h2 class="text-white text-sm font-medium mb-4">Add Developer to Workspace</h2>
         <div id="team-error" class="hidden mb-4 text-danger text-xs bg-danger/10 border border-danger/30 rounded p-3"></div>
-        <div id="team-success" class="hidden mb-4 text-success text-xs bg-success/10 border border-success/30 rounded p-3"></div>
+        <div id="team-success" class="hidden mb-4 text-xs bg-panel border border-success/40 rounded-lg p-4"></div>
         <form id="add-dev-form" class="space-y-3">
           <div>
             <label class="text-muted text-xs mb-1 block">Full Name</label>
@@ -143,6 +146,39 @@
       <div id="collab-workspace-list" class="space-y-3"></div>
     </div>
 
+    <!-- Profile Section -->
+    <div id="section-profile" class="p-6 hidden">
+      <div class="max-w-md">
+        <h2 class="text-white text-sm font-medium mb-4">My Profile</h2>
+        <div id="profile-error" class="hidden mb-3 text-danger text-xs bg-danger/10 border border-danger/30 rounded p-3"></div>
+        <div id="profile-success" class="hidden mb-3 text-success text-xs bg-success/10 border border-success/30 rounded p-3">Profile updated.</div>
+        <div class="flex items-center gap-4 mb-5">
+          <div id="profile-avatar-wrap" class="cursor-pointer" onclick="openAvatarPicker(onAvatarUploaded)">
+            <div id="profile-avatar" class="w-16 h-16 rounded-full bg-surface border-2 border-border flex items-center justify-center text-accent text-xl font-mono">?</div>
+          </div>
+          <div>
+            <button onclick="openAvatarPicker(onAvatarUploaded)" class="px-3 py-1.5 bg-surface border border-border text-white text-xs rounded-md hover:border-accent transition">Change Photo</button>
+            <div class="text-muted text-xs mt-1">Max 5 MB. Circle crop applied.</div>
+          </div>
+        </div>
+        <form id="profile-form" class="space-y-3">
+          <div>
+            <label class="text-muted text-xs mb-1 block">Full Name</label>
+            <input name="full_name" id="pf-full-name" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label class="text-muted text-xs mb-1 block">Email</label>
+            <input name="email" type="email" id="pf-email" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          </div>
+          <div>
+            <label class="text-muted text-xs mb-1 block">Workspace Username</label>
+            <input name="username" id="pf-username" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+          </div>
+          <button type="submit" class="w-full py-2 bg-accent text-surface font-medium rounded-md hover:bg-blue-400 transition text-sm">Save Changes</button>
+        </form>
+      </div>
+    </div>
+
   </main>
 </div>
 {% endblock %}
@@ -152,15 +188,16 @@ const slug = '{{ workspace_slug }}';
 document.body.dataset.workspace = slug;
 
 function showSection(name) {
-  ['overview','developers','timeline','team','collaborations'].forEach(s => {
+  ['overview','developers','timeline','team','collaborations','profile'].forEach(s => {
     document.getElementById(`section-${s}`).classList.toggle('hidden', s !== name);
   });
-  const titles = { overview: ['Overview','Live workspace activity'], developers: ['Developers','All workspace members'], timeline: ['Timeline','Developer activity timeline'], team: ['Team Management','Add developers to workspace'], collaborations: ['Collaborations','Active multi-developer tasks'] };
+  const titles = { overview: ['Overview','Live workspace activity'], developers: ['Developers','All workspace members'], timeline: ['Timeline','Developer activity timeline'], team: ['Team Management','Add developers to workspace'], collaborations: ['Collaborations','Active multi-developer tasks'], profile: ['My Profile','Update your account details'] };
   document.getElementById('section-title').textContent = titles[name][0];
   document.getElementById('section-sub').textContent = titles[name][1];
   if (name === 'developers') loadDevList();
   if (name === 'timeline') loadTimelineUsers();
   if (name === 'collaborations') loadWorkspaceCollaborations();
+  if (name === 'profile') loadProfile();
 }
 
 async function loadStats() {
@@ -188,9 +225,7 @@ async function loadLiveStatus() {
     <div class="bg-panel border ${collabs.length ? 'border-accent/40' : 'border-border'} rounded-lg p-4 hover:border-accent/50 transition">
       <div class="flex items-center justify-between mb-3">
         <div class="flex items-center gap-2">
-          <div class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs text-accent font-mono">
-            ${dev.username[0].toUpperCase()}
-          </div>
+          ${avatar(dev.avatar_url || '', dev.username, 'w-8 h-8', 'text-xs')}
           <span class="text-white text-sm font-medium">${dev.username}</span>
         </div>
         <span class="text-xs px-2 py-0.5 rounded-full ${isActive ? 'bg-success/10 text-success border border-success/30' : 'bg-surface text-muted border border-border'}">
@@ -221,9 +256,7 @@ async function loadDevList() {
   document.getElementById('dev-list').innerHTML = members.map(m => `
     <div class="bg-panel border border-border rounded-lg px-4 py-3 flex items-center justify-between">
       <div class="flex items-center gap-3">
-        <div class="w-8 h-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs text-accent font-mono">
-          ${m.username[0].toUpperCase()}
-        </div>
+        ${avatar(m.user?.avatar_url || '', m.username, 'w-8 h-8', 'text-xs')}
         <div>
           <div class="text-white text-sm">${m.username}</div>
           <div class="text-muted text-xs">${m.user.email}</div>
@@ -324,10 +357,52 @@ document.getElementById('add-dev-form').addEventListener('submit', async (e) => 
   });
   const data = await res.json();
   if (!res.ok) { errEl.textContent = JSON.stringify(data); errEl.classList.remove('hidden'); return; }
-  okEl.innerHTML = `Developer created!<br/>Username: <strong>${data.membership.username}</strong><br/>Password: <code class="font-mono">${data.generated_password}</code><br/>Login URL: <a href="${data.login_url}" class="underline">${data.login_url}</a>`;
+  const fullLoginUrl = `${window.location.origin}${data.login_url}`;
+  okEl.innerHTML = `
+    <div class="text-success font-medium mb-3">Developer account created!</div>
+    <div class="bg-surface border border-border rounded-md p-3 space-y-2 font-mono text-xs">
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-muted flex-shrink-0">Workspace Slug</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-white">${slug}</span>
+          <button onclick="copyText('${slug}', this)" class="text-muted hover:text-white transition" title="Copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-muted flex-shrink-0">Username</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-accent">${data.membership.username}</span>
+          <button onclick="copyText('${data.membership.username}', this)" class="text-muted hover:text-white transition" title="Copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-muted flex-shrink-0">Password</span>
+        <div class="flex items-center gap-1.5">
+          <span class="text-white">${data.generated_password}</span>
+          <button onclick="copyText('${data.generated_password}', this)" class="text-muted hover:text-white transition" title="Copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        </div>
+      </div>
+      <div class="flex items-center justify-between gap-2">
+        <span class="text-muted flex-shrink-0">Login URL</span>
+        <div class="flex items-center gap-1.5 min-w-0">
+          <a href="${fullLoginUrl}" target="_blank" class="text-accent underline truncate">${fullLoginUrl}</a>
+          <button onclick="copyText('${fullLoginUrl}', this)" class="text-muted hover:text-white transition flex-shrink-0" title="Copy"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div class="text-muted text-xs mt-2">Share these credentials with the developer. Password cannot be recovered later.</div>
+  `;
   okEl.classList.remove('hidden');
   e.target.reset();
 });
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#3fb950" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>';
+    setTimeout(() => { btn.innerHTML = orig; }, 1500);
+  });
+}
 
 // Load workspace name
 API.get(`/api/workspaces/${slug}/`).then(d => {
@@ -337,5 +412,51 @@ API.get(`/api/workspaces/${slug}/`).then(d => {
 loadStats();
 loadLiveStatus();
 setInterval(() => { loadStats(); loadLiveStatus(); }, 10000);
+
+async function loadProfile() {
+  const data = await API.get(`/api/auth/me/`);
+  const mem = await API.get(`/api/auth/${slug}/members/`);
+  if (!data) return;
+  document.getElementById('pf-full-name').value = data.full_name || '';
+  document.getElementById('pf-email').value = data.email || '';
+  const avatarEl = document.getElementById('profile-avatar');
+  if (data.avatar_url) {
+    avatarEl.outerHTML = `<img id="profile-avatar" src="${data.avatar_url}" class="w-16 h-16 rounded-full object-cover border-2 border-accent cursor-pointer" onclick="openAvatarPicker(onAvatarUploaded)" />`;
+  } else {
+    avatarEl.textContent = (data.full_name || '?')[0].toUpperCase();
+  }
+  if (mem) {
+    const members = mem.results || mem;
+    const me = members.find(m => m.user && m.user.email === data.email);
+    if (me) document.getElementById('pf-username').value = me.username || '';
+  }
+}
+
+function onAvatarUploaded(url) {
+  const wrap = document.getElementById('profile-avatar-wrap');
+  wrap.innerHTML = `<img id="profile-avatar" src="${url}" class="w-16 h-16 rounded-full object-cover border-2 border-accent cursor-pointer" onclick="openAvatarPicker(onAvatarUploaded)" />`;
+}
+
+document.getElementById('profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errEl = document.getElementById('profile-error');
+  const okEl = document.getElementById('profile-success');
+  errEl.classList.add('hidden'); okEl.classList.add('hidden');
+  const payload = {};
+  const fn = document.getElementById('pf-full-name').value.trim();
+  const em = document.getElementById('pf-email').value.trim();
+  const un = document.getElementById('pf-username').value.trim();
+  if (fn) payload.full_name = fn;
+  if (em) payload.email = em;
+  if (un) payload.username = un;
+  if (!Object.keys(payload).length) { errEl.textContent = 'Nothing to update.'; errEl.classList.remove('hidden'); return; }
+  const res = await API.patch(`/api/auth/${slug}/profile/update/`, payload);
+  if (res && res.full_name !== undefined) {
+    okEl.classList.remove('hidden');
+  } else {
+    const msg = res?.username?.[0] || res?.email?.[0] || res?.error || 'Update failed.';
+    errEl.textContent = msg; errEl.classList.remove('hidden');
+  }
+});
 </script>
 {% endblock %}

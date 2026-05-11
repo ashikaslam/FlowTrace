@@ -152,6 +152,31 @@ When a developer accepts a collaboration request, they appear in:
 - **Manager Collaborations section** — dedicated view listing all tasks in the workspace with active collaborators, showing all participant usernames and join times
 - **Manager timeline** — sessions with collaborators show a collab badge and accent-colored card border
 
+### Collaboration Request UX Rules
+
+When a developer opens the collaboration request modal on a task, the system fetches the current status of every workspace member for that task via `GET collab/tasks/{task_id}/member-status/`. Each member row in the modal reflects their status:
+
+| Status | UI behaviour |
+|--------|--------------|
+| `collaborating` | Row dimmed, click shows toast — blocked |
+| `pending` | Row dimmed, click shows toast — blocked |
+| `rejected` | Row selectable; on send, a custom in-UI confirm modal appears asking to re-send |
+| `none` | Row selectable normally |
+
+The History tab in the Collaboration section shows **all** sent requests regardless of status (including pending), so developers can track and cancel outgoing requests that haven't been responded to yet.
+
+### Task List Button Behaviour
+
+The task list in the developer dashboard shows context-aware action buttons:
+
+| Task status | Button shown |
+|-------------|-------------|
+| `active` | ⏸ Pause (opens pause modal) |
+| `paused` | ▶ Resume (starts session or opens switch modal) |
+| `completed` | No button |
+
+Creating a task via the **Create** button only creates it as `paused` — no session is started. The **Start** button creates and immediately starts a session.
+
 ### Workspace Isolation Guarantee
 
 Every collaboration lookup filters by `workspace__slug`:

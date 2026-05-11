@@ -7,8 +7,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .models import User, WorkspaceMembership
 from .serializers import (
     RegisterSerializer, UserSerializer,
-    WorkspaceTokenSerializer, MembershipSerializer, CreateDeveloperSerializer,
+    WorkspaceTokenSerializer, MembershipSerializer,
+    CreateDeveloperSerializer, UpdateProfileSerializer,
 )
+from .utils import upload_to_imgbb
+from rest_framework.parsers import MultiPartParser
 from apps.workspaces.models import Workspace
 from apps.workspaces.permissions import IsWorkspaceManager
 import secrets
@@ -96,6 +99,59 @@ class MeView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user
+
+
+class AvatarUploadView(APIView):
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def post(self, request):
+        file = request.FILES.get("avatar")
+        if not file:
+            return Response({"error": "No file provided."}, status=400)
+        if file.size > 5 * 1024 * 1024:
+            return Response({"error": "Image must be 5 MB or less."}, status=400)
+        if not file.content_type.startswith("image/"):
+            return Response({"error": "File must be an image."}, status=400)
+        try:
+            url = upload_to_imgbb(file)
+        except Exception:
+            return Response({"error": "Image upload failed. Try again."}, status=502)
+        request.user.avatar_url = url
+        request.user.save(update_fields=["avatar_url"])
+        return Response({"avatar_url": url})
+
+
+class UpdateProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, workspace_slug):
+        serializer = UpdateProfileSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        d = serializer.validated_data
+        user = request.user
+
+        if "full_name" in d:
+            user.full_name = d["full_name"]
+        if "email" in d:
+            user.email = d["email"]
+        user.save()
+
+        if "username" in d:
+            try:
+                membership = WorkspaceMembership.objects.get(
+                    user=user, workspace__slug=workspace_slug, is_active=True
+                )
+            except WorkspaceMembership.DoesNotExist:
+                return Response({"error": "Membership not found."}, status=404)
+            if WorkspaceMembership.objects.filter(
+                workspace=membership.workspace, username=d["username"]
+            ).exclude(pk=membership.pk).exists():
+                return Response({"username": ["Username already taken in this workspace."]}, status=400)
+            membership.username = d["username"]
+            membership.save(update_fields=["username"])
+
+        return Response({"full_name": user.full_name, "email": user.email})
 
 
 class WorkspaceMembersView(generics.ListAPIView):

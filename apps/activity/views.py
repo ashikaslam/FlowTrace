@@ -127,7 +127,7 @@ class WorkspaceMemberSearchView(APIView):
                 workspace__slug=workspace_slug, is_active=True, user__full_name__icontains=q
             ).exclude(id=membership.id).select_related("user")
             qs = qs.distinct()
-        results = [{"username": m.username, "full_name": m.user.full_name} for m in qs[:50]]
+        results = [{"username": m.username, "full_name": m.user.full_name, "avatar_url": m.user.avatar_url} for m in qs[:50]]
         return Response(results)
 
 
@@ -307,6 +307,42 @@ class LeaveCollaborationView(APIView):
         return Response({"status": "left"})
 
 
+class TaskMemberCollabStatusView(APIView):
+    """Returns collab status of all workspace members for a specific task."""
+    permission_classes = [IsAuthenticated, IsWorkspaceMember]
+
+    def get(self, request, workspace_slug, task_id):
+        membership = get_membership(request.user, workspace_slug)
+        members = WorkspaceMembership.objects.filter(
+            workspace__slug=workspace_slug, is_active=True
+        ).exclude(id=membership.id).select_related("user")
+
+        # Active collaborators
+        active_collabs = set(
+            TaskCollaborator.objects.filter(task_id=task_id, is_active=True)
+            .values_list("member_id", flat=True)
+        )
+        # Latest request per target
+        latest_requests = {}
+        for req in CollaborationRequest.objects.filter(
+            requester=membership, task_id=task_id
+        ).order_by("-created_at"):
+            if req.target_id not in latest_requests:
+                latest_requests[req.target_id] = req.status
+
+        result = {}
+        for m in members:
+            if m.id in active_collabs:
+                result[m.username] = "collaborating"
+            elif latest_requests.get(m.id) == CollaborationRequest.STATUS_PENDING:
+                result[m.username] = "pending"
+            elif latest_requests.get(m.id) == CollaborationRequest.STATUS_REJECTED:
+                result[m.username] = "rejected"
+            else:
+                result[m.username] = "none"
+        return Response(result)
+
+
 class MyCollaborationHistoryView(APIView):
     """All collaboration requests involving the current developer (sent + received, all statuses)."""
     permission_classes = [IsAuthenticated, IsWorkspaceMember]
@@ -315,7 +351,7 @@ class MyCollaborationHistoryView(APIView):
         membership = get_membership(request.user, workspace_slug)
         sent = CollaborationRequest.objects.filter(
             requester=membership, workspace__slug=workspace_slug
-        ).exclude(status=CollaborationRequest.STATUS_PENDING).select_related("target", "task").order_by("-created_at")
+        ).select_related("target", "task").order_by("-created_at")
         received = CollaborationRequest.objects.filter(
             target=membership, workspace__slug=workspace_slug
         ).exclude(status=CollaborationRequest.STATUS_PENDING).select_related("requester", "task").order_by("-created_at")

@@ -35,6 +35,7 @@ Global account. Email is the unique identifier. One user can belong to multiple 
 | id | BigInt PK | |
 | email | EmailField | unique globally |
 | full_name | CharField | |
+| avatar_url | URLField | public image URL from ImgBB, blank by default |
 | is_active | Boolean | |
 | created_at | DateTime | |
 

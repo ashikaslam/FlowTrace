@@ -38,16 +38,17 @@ class SwitchTaskSerializer(serializers.Serializer):
 
 class CollaborationRequestSerializer(serializers.ModelSerializer):
     requester_username = serializers.CharField(source="requester.username", read_only=True)
+    requester_avatar = serializers.CharField(source="requester.user.avatar_url", read_only=True)
     target_username = serializers.CharField(source="target.username", read_only=True)
     task_title = serializers.CharField(source="task.title", read_only=True)
 
     class Meta:
         model = CollaborationRequest
         fields = [
-            "id", "requester_username", "target_username", "task_id", "task_title",
+            "id", "requester_username", "requester_avatar", "target_username", "task_id", "task_title",
             "status", "message", "created_at", "responded_at",
         ]
-        read_only_fields = ["id", "requester_username", "target_username", "task_title", "status", "created_at", "responded_at"]
+        read_only_fields = ["id", "requester_username", "requester_avatar", "target_username", "task_title", "status", "created_at", "responded_at"]
 
 
 class SendCollaborationRequestSerializer(serializers.Serializer):
@@ -75,12 +76,13 @@ class CollaborationActivityLogSerializer(serializers.ModelSerializer):
 
 class DeveloperStatusSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="membership.username", read_only=True)
+    avatar_url = serializers.CharField(source="membership.user.avatar_url", read_only=True)
     current_task = serializers.SerializerMethodField()
     last_seen = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = DeveloperStatus
-        fields = ["username", "current_task", "last_seen"]
+        fields = ["username", "avatar_url", "current_task", "last_seen"]
 
     def get_current_task(self, obj):
         if obj.current_session:

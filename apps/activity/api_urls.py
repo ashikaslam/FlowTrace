@@ -8,7 +8,7 @@ from .views import (
     CancelCollaborationRequestView, TaskCollaboratorsView,
     TaskCollaborationLogsView, LeaveCollaborationView,
     MyCollaborationTimelineView, WorkspaceCollaborationsView,
-    MyCollaborationHistoryView,
+    MyCollaborationHistoryView, TaskMemberCollabStatusView,
 )
 
 urlpatterns = [
@@ -29,6 +29,7 @@ urlpatterns = [
     path("<str:workspace_slug>/collab/tasks/<int:task_id>/collaborators/", TaskCollaboratorsView.as_view(), name="api-task-collaborators"),
     path("<str:workspace_slug>/collab/tasks/<int:task_id>/logs/", TaskCollaborationLogsView.as_view(), name="api-task-collab-logs"),
     path("<str:workspace_slug>/collab/tasks/<int:task_id>/leave/", LeaveCollaborationView.as_view(), name="api-collab-leave"),
+    path("<str:workspace_slug>/collab/tasks/<int:task_id>/member-status/", TaskMemberCollabStatusView.as_view(), name="api-task-member-collab-status"),
     path("<str:workspace_slug>/collab/my-timeline/", MyCollaborationTimelineView.as_view(), name="api-collab-my-timeline"),
     path("<str:workspace_slug>/collab/workspace/", WorkspaceCollaborationsView.as_view(), name="api-collab-workspace"),
 ]
