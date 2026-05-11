@@ -18,6 +18,11 @@ User (global)
   │         │
   │         ├──< ActivitySession
   │         └──── DeveloperStatus (1:1)
+  │
+  │    Task also has:
+  │         ├──< CollaborationRequest (requester → target)
+  │         ├──< TaskCollaborator
+  │         └──< CollaborationActivityLog
 ```
 
 ## Models
@@ -100,6 +105,8 @@ The core tracking model. One row = one continuous work session on a task.
 
 **History preservation**: Sessions are NEVER deleted. They form the immutable audit trail.
 
+**Computed field** (`collaborators`): serializer-level field — returns usernames of other active `TaskCollaborator` records on the same task, excluding the session owner. Used in timeline and live-status responses.
+
 ### DeveloperStatus
 One row per membership. Tracks the currently active session for fast live-status queries.
 
@@ -110,11 +117,79 @@ One row per membership. Tracks the currently active session for fast live-status
 | current_session | FK → ActivitySession | null = idle |
 | last_seen | DateTime | auto-updated |
 
+**Computed field** (`current_task.collaborators`): serializer-level field — when a developer is active, the response includes a `collaborators` list of other active `TaskCollaborator` usernames on the same task. Powers the manager overview cards.
+
 ### TaskComment + Mention
 
 `TaskComment`: body text with `@mention` support. Mentions are auto-extracted on save.
 
 `Mention`: links a comment to a mentioned WorkspaceMembership. Unique per `(comment, mentioned_user)`.
+
+---
+
+## Collaboration Models
+
+### CollaborationRequest
+Records a collaboration invitation from one workspace member to another on a specific task.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | BigInt PK | |
+| requester | FK → WorkspaceMembership | who sent the request |
+| target | FK → WorkspaceMembership | who received it |
+| task | FK → Task | task collaboration is requested on |
+| workspace | FK → Workspace | denormalized for fast workspace-scoped queries |
+| status | CharField | `pending`, `accepted`, `rejected`, `cancelled` |
+| message | TextField | optional context message |
+| created_at | DateTime | |
+| responded_at | DateTime | null until responded or cancelled |
+
+**Unique constraint**: `(requester, target, task)` — one record per pair per task. Re-sending after rejection/cancellation re-opens the same row as `pending`.
+
+**Indexes**: `(target, status)` for fast inbox queries, `(task, status)` for task-level views.
+
+### TaskCollaborator
+Tracks who is (or was) actively collaborating on a task. Created when a collaboration request is accepted.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | BigInt PK | |
+| task | FK → Task | |
+| member | FK → WorkspaceMembership | the collaborating developer |
+| joined_at | DateTime | when collaboration started |
+| left_at | DateTime | null = still active |
+| is_active | Boolean | fast filter for current collaborators |
+
+**Unique constraint**: `(task, member)` — one record per developer per task; reactivated on re-join.
+
+**Index**: `(task, is_active)` for live collaborator lookups.
+
+### CollaborationActivityLog
+Permanent, append-only audit trail of every collaboration event on a task.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | BigInt PK | |
+| task | FK → Task | |
+| actor | FK → WorkspaceMembership | who performed the action |
+| action_type | CharField | see action types below |
+| metadata | JSONField | contextual data (target, requester, etc.) |
+| timestamp | DateTime | |
+
+**Action types:**
+
+| Value | Meaning |
+|-------|---------|
+| `request_sent` | Developer sent a collaboration request |
+| `request_accepted` | Target accepted the request |
+| `request_rejected` | Target rejected the request |
+| `request_cancelled` | Requester cancelled before response |
+| `collab_started` | Active collaboration session began |
+| `collab_ended` | Developer left the collaboration |
+
+**Index**: `(task, timestamp)` for chronological log queries.
+
+**History preservation**: Log rows are NEVER deleted. They form the permanent collaboration audit trail alongside `ActivitySession`.
 
 ## Multi-Tenant Isolation Strategy
 

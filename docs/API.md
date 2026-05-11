@@ -179,14 +179,31 @@ Stop current session without starting a new one.
 ---
 
 ### GET /api/activity/{workspace_slug}/timeline/
-My activity timeline.
+My activity timeline. Each session includes a `collaborators` field listing other active collaborators on that task.
 
 **Query params:** `?date=2025-01-15`
+
+**Response (session object):**
+```json
+{
+  "id": 12,
+  "task_id": 5,
+  "task_title": "Fix payment API",
+  "username": "alex",
+  "started_at": "...",
+  "ended_at": "...",
+  "duration_seconds": 3600,
+  "completion_at_start": 20,
+  "completion_at_end": 65,
+  "switch_note": "",
+  "collaborators": ["john"]
+}
+```
 
 ---
 
 ### GET /api/activity/{workspace_slug}/timeline/{username}/
-Any developer's timeline (manager access).
+Any developer's timeline (manager access). Also includes `collaborators` per session.
 
 **Query params:** `?date=2025-01-15`
 
@@ -200,17 +217,213 @@ Live status of all developers in workspace.
 [
   {
     "username": "john",
-    "current_task": { "id": 5, "title": "Fix login bug", "started_at": "...", "completion": 35 },
+    "current_task": {
+      "id": 5,
+      "title": "Fix login bug",
+      "started_at": "...",
+      "completion": 35,
+      "collaborators": ["mike", "sarah"]
+    },
     "last_seen": "..."
   },
   { "username": "jane", "current_task": null, "last_seen": "..." }
 ]
 ```
 
+`collaborators` lists the usernames of other active collaborators on the same task. Empty array when working solo.
+
 ---
 
 ### GET /api/activity/{workspace_slug}/status/
 My current status.
+
+---
+
+## Collaboration Endpoints
+
+All collaboration endpoints are workspace-scoped. Cross-workspace collaboration is structurally impossible — member lookups always filter by `workspace__slug`.
+
+### GET /api/activity/{workspace_slug}/collab/members/?q=
+List all workspace members available for collaboration. Returns all members when `q` is empty, or filters by username/full name when provided.
+
+**Query params:** `?q=john` (optional)
+
+**Response:**
+```json
+[
+  { "username": "john", "full_name": "John Smith" },
+  { "username": "mike", "full_name": "Mike Lee" }
+]
+```
+
+Returns up to 50 results. Never includes the requesting developer themselves.
+
+---
+
+### POST /api/activity/{workspace_slug}/collab/request/
+Send a collaboration request to a workspace developer on a specific task.
+
+**Request:**
+```json
+{ "target_username": "john", "task_id": 5, "message": "Need help with the payment logic" }
+```
+
+**Response:** `201` — CollaborationRequest object.
+```json
+{
+  "id": 1,
+  "requester_username": "alex",
+  "target_username": "john",
+  "task_id": 5,
+  "task_title": "Fix payment API issue",
+  "status": "pending",
+  "message": "Need help with the payment logic",
+  "created_at": "...",
+  "responded_at": null
+}
+```
+
+If a previous request to the same developer on the same task was rejected/cancelled, it is re-opened as `pending`.
+
+**Errors:**
+- `400` — Request already pending, or self-request
+- `404` — Developer or task not found in workspace
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/incoming/
+List all pending collaboration requests received by the current developer.
+
+**Response:** Paginated list of CollaborationRequest objects with `status=pending`.
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/history/
+All past collaboration requests involving the current developer (both sent and received, all non-pending statuses), sorted newest first.
+
+**Response:**
+```json
+[
+  {
+    "id": 1,
+    "direction": "sent",
+    "other_username": "john",
+    "task_id": 5,
+    "task_title": "Fix payment API",
+    "status": "accepted",
+    "message": "Need help with the payment logic",
+    "created_at": "...",
+    "responded_at": "..."
+  },
+  {
+    "id": 2,
+    "direction": "received",
+    "other_username": "alex",
+    "task_id": 8,
+    "task_title": "Auth bug",
+    "status": "rejected",
+    "message": "",
+    "created_at": "...",
+    "responded_at": "..."
+  }
+]
+```
+
+`direction`: `sent` = current developer sent the request, `received` = they received it.
+
+---
+
+### POST /api/activity/{workspace_slug}/collab/{request_id}/respond/
+Accept or reject an incoming collaboration request.
+
+**Request:** `{ "action": "accept" }` or `{ "action": "reject" }`
+
+**On accept:**
+- Request status → `accepted`
+- `TaskCollaborator` record created (or reactivated)
+- Two `CollaborationActivityLog` entries written: `request_accepted` + `collab_started`
+
+**On reject:**
+- Request status → `rejected`
+- One log entry written: `request_rejected`
+
+**Response:** Updated CollaborationRequest object.
+
+**Errors:** `404` if request not found or not pending.
+
+---
+
+### POST /api/activity/{workspace_slug}/collab/{request_id}/cancel/
+Cancel a pending outgoing request (requester only).
+
+**Response:** `{ "status": "cancelled" }`
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/tasks/{task_id}/collaborators/
+List all collaborators on a task (active and past).
+
+**Response:**
+```json
+[
+  { "id": 1, "username": "john", "full_name": "John Smith", "joined_at": "...", "left_at": null, "is_active": true },
+  { "id": 2, "username": "mike", "full_name": "Mike Lee", "joined_at": "...", "left_at": "...", "is_active": false }
+]
+```
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/tasks/{task_id}/logs/
+Full collaboration history log for a task. Permanent and append-only.
+
+**Response:**
+```json
+[
+  { "id": 1, "actor_username": "alex", "action_type": "request_sent", "metadata": { "target": "john" }, "timestamp": "..." },
+  { "id": 2, "actor_username": "john", "action_type": "request_accepted", "metadata": { "requester": "alex" }, "timestamp": "..." },
+  { "id": 3, "actor_username": "john", "action_type": "collab_started", "metadata": { "with": "alex" }, "timestamp": "..." }
+]
+```
+
+**Action types:** `request_sent`, `request_accepted`, `request_rejected`, `request_cancelled`, `collab_started`, `collab_ended`
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/my-timeline/
+Sessions on tasks where the current developer is a collaborator (tasks they didn't create but accepted collaboration on).
+
+**Query params:** `?date=2025-01-15`
+
+**Response:** Same session object format as the main timeline, including `collaborators` field.
+
+---
+
+### GET /api/activity/{workspace_slug}/collab/workspace/
+Manager endpoint. Returns all tasks in the workspace that currently have active collaborators, grouped by task.
+
+**Response:**
+```json
+[
+  {
+    "task_id": 5,
+    "task_title": "Fix payment API",
+    "since": "...",
+    "collaborators": [
+      { "username": "john", "full_name": "John Smith", "joined_at": "..." },
+      { "username": "mike", "full_name": "Mike Lee", "joined_at": "..." }
+    ]
+  }
+]
+```
+
+---
+
+### POST /api/activity/{workspace_slug}/collab/tasks/{task_id}/leave/
+Leave an active collaboration on a task.
+
+**Response:** `{ "status": "left" }`
+
+Writes a `collab_ended` log entry and sets `TaskCollaborator.is_active = false` with `left_at` timestamp.
 
 ---
 

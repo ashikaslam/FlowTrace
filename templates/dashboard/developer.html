@@ -24,6 +24,10 @@
       <a href="#" onclick="showSection('timeline')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
         <span>⏱</span> My Timeline
       </a>
+      <a href="#" onclick="showSection('collab')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>🤝</span> Collaboration
+        <span id="collab-badge" class="hidden ml-auto text-xs bg-accent text-surface px-1.5 py-0.5 rounded-full font-semibold"></span>
+      </a>
     </nav>
     <div class="p-3 border-t border-border">
       <a href="/logout/" class="flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-danger transition">
@@ -117,13 +121,32 @@
       <div id="task-list" class="space-y-2"></div>
     </div>
 
+    <!-- Collaboration Requests Section -->
+    <div id="section-collab" class="p-6 hidden">
+      <div class="flex gap-2 mb-5">
+        <button onclick="setCollabTab('pending')" id="ctab-pending" class="px-3 py-1 text-xs rounded border border-accent text-white transition">Pending Requests <span id="pending-count"></span></button>
+        <button onclick="setCollabTab('history')" id="ctab-history" class="px-3 py-1 text-xs rounded border border-border text-muted hover:text-white transition">History</button>
+      </div>
+      <div id="collab-pending-panel">
+        <div id="collab-requests-list" class="space-y-3"></div>
+      </div>
+      <div id="collab-history-panel" class="hidden">
+        <div id="collab-history-list" class="space-y-3"></div>
+      </div>
+    </div>
+
     <!-- Timeline Section -->
     <div id="section-timeline" class="p-6 hidden">
       <div class="flex items-center gap-3 mb-4">
         <input type="date" id="my-timeline-date" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent" />
         <button onclick="loadMyTimeline()" class="px-4 py-1.5 bg-accent text-surface text-sm rounded-md hover:bg-blue-400 transition">Load</button>
       </div>
+      <div class="flex gap-2 mb-4">
+        <button onclick="setTimelineTab('mine')" id="tab-mine" class="px-3 py-1 text-xs rounded border border-accent text-white transition">My Sessions</button>
+        <button onclick="setTimelineTab('collab')" id="tab-collab" class="px-3 py-1 text-xs rounded border border-border text-muted hover:text-white transition">Collaborated Tasks</button>
+      </div>
       <div id="my-timeline" class="timeline-line pl-8 space-y-4"></div>
+      <div id="collab-timeline" class="timeline-line pl-8 space-y-4 hidden"></div>
     </div>
 
   </main>
@@ -205,14 +228,20 @@ let timerInterval = null;
 let allTasks = [];
 
 function showSection(name) {
-  ['active','tasks','timeline'].forEach(s => {
+  ['active','tasks','timeline','collab'].forEach(s => {
     document.getElementById(`section-${s}`).classList.toggle('hidden', s !== name);
   });
-  const titles = { active: ['Active Task','Your current work session'], tasks: ['My Tasks','All your tasks'], timeline: ['My Timeline','Your activity history'] };
+  const titles = {
+    active: ['Active Task','Your current work session'],
+    tasks: ['My Tasks','All your tasks'],
+    timeline: ['My Timeline','Your activity history'],
+    collab: ['Collaboration Requests','Incoming collaboration invitations'],
+  };
   document.getElementById('section-title').textContent = titles[name][0];
   document.getElementById('section-sub').textContent = titles[name][1];
   if (name === 'tasks') loadTasks();
-  if (name === 'timeline') { document.getElementById('my-timeline-date').value = new Date().toISOString().split('T')[0]; loadMyTimeline(); }
+  if (name === 'timeline') { document.getElementById('my-timeline-date').value = new Date().toISOString().split('T')[0]; setTimelineTab('mine'); }
+  if (name === 'collab') setCollabTab('pending');
 }
 
 async function loadCurrentStatus() {
@@ -293,6 +322,7 @@ function renderTasks(tasks) {
         <div class="flex-1 bg-surface rounded-full h-1">
           <div class="bg-accent h-1 rounded-full" style="width:${t.completion_percentage}%"></div>
         </div>
+        <a href="/tasks/${slug}/${t.id}/" class="text-xs px-3 py-1 border border-border text-muted rounded hover:text-white hover:border-accent/40 transition">View</a>
         ${t.status !== 'completed' ? `
         <button onclick="resumeTask(${t.id})" class="text-xs px-3 py-1 bg-accent/10 border border-accent/30 text-accent rounded hover:bg-accent hover:text-surface transition">
           ${t.status === 'active' ? 'Active' : '▶ Resume'}
@@ -388,24 +418,50 @@ async function loadMyTimeline() {
   const sessions = data.results || data;
   const container = document.getElementById('my-timeline');
   if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No activity for this date.</div>'; return; }
-  container.innerHTML = sessions.map(s => {
-    const dur = s.duration_seconds;
-    const mins = Math.floor(dur / 60);
-    const ended = s.ended_at ? new Date(s.ended_at).toLocaleTimeString() : 'ongoing';
-    return `
-    <div class="relative flex gap-4">
-      <div class="timeline-dot ${s.ended_at ? 'bg-surface' : 'bg-accent'} border-2 ${s.ended_at ? 'border-border' : 'border-accent'} z-10"></div>
-      <div class="flex-1 bg-panel border border-border rounded-lg p-3 mb-2">
-        <div class="flex items-center justify-between mb-1">
-          <span class="text-white text-sm font-medium">${s.task_title}</span>
-          <span class="text-xs ${s.ended_at ? 'text-muted' : 'text-accent'}">${s.ended_at ? `${mins}m` : '● active'}</span>
-        </div>
-        <div class="text-muted text-xs">${new Date(s.started_at).toLocaleTimeString()} → ${ended}</div>
-        ${s.completion_at_end !== null ? `<div class="text-success text-xs mt-1">${s.completion_at_end}% complete</div>` : ''}
-        ${s.switch_note ? `<div class="mt-1 text-xs text-muted italic border-l-2 border-border pl-2">${s.switch_note}</div>` : ''}
+  container.innerHTML = sessions.map(s => renderSessionCard(s)).join('');
+}
+
+async function loadCollabTimeline() {
+  const date = document.getElementById('my-timeline-date').value;
+  const data = await API.get(`/api/activity/${slug}/collab/my-timeline/?date=${date}`);
+  if (!data) return;
+  const sessions = data.results || data;
+  const container = document.getElementById('collab-timeline');
+  if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No collaborated tasks for this date.</div>'; return; }
+  container.innerHTML = sessions.map(s => renderSessionCard(s, true)).join('');
+}
+
+function renderSessionCard(s, isCollab = false) {
+  const dur = s.duration_seconds;
+  const mins = Math.floor(dur / 60);
+  const ended = s.ended_at ? new Date(s.ended_at).toLocaleTimeString() : 'ongoing';
+  const collabs = s.collaborators || [];
+  const collabBadge = collabs.length > 0
+    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-accent/10 border border-accent/30 text-accent text-xs rounded-full">collab: ${collabs.map(u => '@'+u).join(', ')}</span>`
+    : (isCollab ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 bg-accent/10 border border-accent/30 text-accent text-xs rounded-full">collaborated with @${s.username}</span>` : '');
+  return `
+  <div class="relative flex gap-4">
+    <div class="timeline-dot ${s.ended_at ? 'bg-surface' : 'bg-accent'} border-2 ${s.ended_at ? 'border-border' : 'border-accent'} z-10"></div>
+    <div class="flex-1 bg-panel border ${collabs.length || isCollab ? 'border-accent/40' : 'border-border'} rounded-lg p-3 mb-2">
+      <div class="flex items-center justify-between mb-1">
+        <span class="text-white text-sm font-medium">${s.task_title}</span>
+        <span class="text-xs ${s.ended_at ? 'text-muted' : 'text-accent'}">${s.ended_at ? `${mins}m` : '● active'}</span>
       </div>
-    </div>`;
-  }).join('');
+      <div class="text-muted text-xs">${new Date(s.started_at).toLocaleTimeString()} → ${ended}</div>
+      ${collabBadge ? `<div class="mt-2">${collabBadge}</div>` : ''}
+      ${s.completion_at_end !== null ? `<div class="text-success text-xs mt-1">${s.completion_at_end}% complete</div>` : ''}
+      ${s.switch_note ? `<div class="mt-1 text-xs text-muted italic border-l-2 border-border pl-2">${s.switch_note}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function setTimelineTab(tab) {
+  document.getElementById('tab-mine').className = `px-3 py-1 text-xs rounded border transition ${tab === 'mine' ? 'border-accent text-white' : 'border-border text-muted hover:text-white'}`;
+  document.getElementById('tab-collab').className = `px-3 py-1 text-xs rounded border transition ${tab === 'collab' ? 'border-accent text-white' : 'border-border text-muted hover:text-white'}`;
+  document.getElementById('my-timeline').classList.toggle('hidden', tab !== 'mine');
+  document.getElementById('collab-timeline').classList.toggle('hidden', tab !== 'collab');
+  if (tab === 'mine') loadMyTimeline();
+  if (tab === 'collab') loadCollabTimeline();
 }
 
 document.getElementById('new-task-form').addEventListener('submit', async (e) => {
@@ -426,7 +482,98 @@ document.getElementById('new-task-form').addEventListener('submit', async (e) =>
   }
 });
 
+function setCollabTab(tab) {
+  document.getElementById('ctab-pending').className = `px-3 py-1 text-xs rounded border transition ${tab === 'pending' ? 'border-accent text-white' : 'border-border text-muted hover:text-white'}`;
+  document.getElementById('ctab-history').className = `px-3 py-1 text-xs rounded border transition ${tab === 'history' ? 'border-accent text-white' : 'border-border text-muted hover:text-white'}`;
+  document.getElementById('collab-pending-panel').classList.toggle('hidden', tab !== 'pending');
+  document.getElementById('collab-history-panel').classList.toggle('hidden', tab !== 'history');
+  if (tab === 'pending') loadCollabRequests();
+  if (tab === 'history') loadCollabHistory();
+}
+
+async function loadCollabRequests() {
+  const data = await API.get(`/api/activity/${slug}/collab/incoming/`);
+  if (!data) return;
+  const requests = data.results || data;
+  const badge = document.getElementById('collab-badge');
+  const countEl = document.getElementById('pending-count');
+  if (requests.length) {
+    badge.textContent = requests.length;
+    badge.classList.remove('hidden');
+    countEl.textContent = `(${requests.length})`;
+  } else {
+    badge.classList.add('hidden');
+    countEl.textContent = '';
+  }
+  const el = document.getElementById('collab-requests-list');
+  if (!requests.length) { el.innerHTML = '<div class="text-muted text-sm text-center py-8">No pending collaboration requests</div>'; return; }
+  el.innerHTML = requests.map(r => `
+    <div class="bg-panel border border-border rounded-lg p-4" id="collab-req-${r.id}">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="text-white text-sm font-medium">@${r.requester_username} <span class="text-muted font-normal">wants to collaborate</span></div>
+          <div class="text-accent text-xs mt-1 truncate">&#128203; ${r.task_title}</div>
+          ${r.message ? `<div class="text-muted text-xs mt-1 italic">&ldquo;${r.message}&rdquo;</div>` : ''}
+          <div class="text-muted text-xs mt-1">${new Date(r.created_at).toLocaleString()}</div>
+        </div>
+        <div class="flex gap-2 flex-shrink-0">
+          <button onclick="respondCollab(${r.id}, 'reject')" class="px-3 py-1.5 border border-border text-muted text-xs rounded-md hover:border-danger hover:text-danger transition">Reject</button>
+          <button onclick="respondCollab(${r.id}, 'accept')" class="px-3 py-1.5 bg-success/10 border border-success/30 text-success text-xs rounded-md hover:bg-success hover:text-surface transition">Accept</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadCollabHistory() {
+  const data = await API.get(`/api/activity/${slug}/collab/history/`);
+  if (!data) return;
+  const el = document.getElementById('collab-history-list');
+  if (!data.length) { el.innerHTML = '<div class="text-muted text-sm text-center py-8">No collaboration history yet</div>'; return; }
+  const statusStyles = {
+    accepted: 'text-success border-success/30 bg-success/10',
+    rejected: 'text-danger border-danger/30 bg-danger/10',
+    cancelled: 'text-muted border-border bg-surface',
+    completed: 'text-accent border-accent/30 bg-accent/10',
+  };
+  el.innerHTML = data.map(r => {
+    const isSent = r.direction === 'sent';
+    const style = statusStyles[r.status] || 'text-muted border-border bg-surface';
+    return `
+    <div class="bg-panel border border-border rounded-lg p-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span class="text-white text-sm font-medium">${isSent ? 'You' : '@' + r.other_username}</span>
+            <span class="text-muted text-xs">${isSent ? 'requested' : 'requested you for'}</span>
+            <span class="text-white text-sm font-medium">${isSent ? '@' + r.other_username : 'you'}</span>
+          </div>
+          <div class="text-accent text-xs mt-1 truncate">&#128203; ${r.task_title}</div>
+          ${r.message ? `<div class="text-muted text-xs mt-1 italic">&ldquo;${r.message}&rdquo;</div>` : ''}
+          <div class="text-muted text-xs mt-1">${new Date(r.created_at).toLocaleString()}</div>
+        </div>
+        <span class="flex-shrink-0 text-xs px-2 py-0.5 rounded border ${style}">${r.status}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function respondCollab(requestId, action) {
+  const res = await API.post(`/api/activity/${slug}/collab/${requestId}/respond/`, { action });
+  if (res && !res.error) {
+    toast(action === 'accept' ? 'Collaboration accepted!' : 'Request rejected', action === 'accept' ? 'success' : 'info');
+    loadCollabRequests();
+  } else {
+    toast(res?.error || 'Failed', 'error');
+  }
+}
+
 API.get(`/api/workspaces/${slug}/`).then(d => { if (d) document.getElementById('ws-name').textContent = d.name; });
 loadCurrentStatus();
+API.get(`/api/activity/${slug}/collab/incoming/`).then(data => {
+  const count = (data?.results || data || []).length;
+  const badge = document.getElementById('collab-badge');
+  if (count) { badge.textContent = count; badge.classList.remove('hidden'); }
+});
 </script>
 {% endblock %}

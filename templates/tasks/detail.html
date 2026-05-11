@@ -18,6 +18,30 @@
         <span id="task-pct" class="text-muted text-xs">0%</span>
       </div>
     </div>
+    <div class="mt-4 pt-4 border-t border-border">
+      <button id="collab-btn" onclick="openCollabModal()" class="px-4 py-2 bg-accent/10 border border-accent/30 text-accent text-xs rounded-md hover:bg-accent hover:text-surface transition">
+        + Request Collaboration
+      </button>
+    </div>
+  </div>
+
+  <!-- Collaborators -->
+  <div class="bg-panel border border-border rounded-xl p-6 mb-6">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="text-white text-sm font-medium">Collaborators</h2>
+      <span id="collab-count" class="text-muted text-xs"></span>
+    </div>
+    <div id="collaborators-list" class="flex flex-wrap gap-2">
+      <span class="text-muted text-xs">None yet</span>
+    </div>
+  </div>
+
+  <!-- Collaboration History -->
+  <div class="bg-panel border border-border rounded-xl p-6 mb-6">
+    <h2 class="text-white text-sm font-medium mb-3">Collaboration History</h2>
+    <div id="collab-log" class="space-y-2 text-xs text-muted">
+      <span>No history yet</span>
+    </div>
   </div>
 
   <!-- Comments -->
@@ -34,11 +58,35 @@
     </div>
   </div>
 </div>
+
+<!-- Collaboration Modal -->
+<div id="collab-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+    <h3 class="text-white font-semibold mb-4">Request Collaboration</h3>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Select developers (workspace only)</label>
+      <div id="collab-members-list" class="bg-surface border border-border rounded-md overflow-hidden max-h-48 overflow-y-auto">
+        <div class="px-3 py-2 text-muted text-xs">Loading...</div>
+      </div>
+    </div>
+    <div id="selected-targets" class="flex flex-wrap gap-2 mb-4 min-h-[28px]"></div>
+    <div class="mb-4">
+      <label class="text-muted text-xs mb-1 block">Message (optional)</label>
+      <input id="collab-message" placeholder="Need help with..."
+        class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+    </div>
+    <div class="flex gap-2">
+      <button onclick="closeCollabModal()" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="sendCollabRequests()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Send Request</button>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block scripts %}
 <script>
 const slug = '{{ workspace_slug }}';
 const taskId = {{ task_id }};
+let selectedTargets = [];
 
 async function loadTask() {
   const t = await API.get(`/api/tasks/${slug}/${taskId}/`);
@@ -72,14 +120,12 @@ async function postComment() {
   loadComments();
 }
 
-// Mention autocomplete
 document.getElementById('comment-input').addEventListener('input', async (e) => {
   const val = e.target.value;
   const match = val.match(/@(\w*)$/);
   const dropdown = document.getElementById('mention-dropdown');
   if (!match) { dropdown.classList.add('hidden'); return; }
-  const q = match[1];
-  const suggestions = await API.get(`/api/comments/${slug}/suggest/?q=${q}`);
+  const suggestions = await API.get(`/api/comments/${slug}/suggest/?q=${match[1]}`);
   if (!suggestions || !suggestions.length) { dropdown.classList.add('hidden'); return; }
   dropdown.innerHTML = suggestions.map(u => `<div class="px-3 py-2 text-sm text-white hover:bg-surface cursor-pointer" onclick="insertMention('${u}')">${u}</div>`).join('');
   dropdown.classList.remove('hidden');
@@ -92,7 +138,148 @@ function insertMention(username) {
   input.focus();
 }
 
+// ── Collaboration ──────────────────────────────────────────────
+
+async function loadCollaborators() {
+  const data = await API.get(`/api/activity/${slug}/collab/tasks/${taskId}/collaborators/`);
+  if (!data) return;
+  const list = data.results || data;
+  const el = document.getElementById('collaborators-list');
+  document.getElementById('collab-count').textContent = list.filter(c => c.is_active).length ? `${list.filter(c => c.is_active).length} active` : '';
+  if (!list.length) { el.innerHTML = '<span class="text-muted text-xs">None yet</span>'; return; }
+  el.innerHTML = list.map(c => `
+    <span class="flex items-center gap-1.5 px-2 py-1 bg-surface border rounded-full text-xs ${c.is_active ? 'text-success border-success/30' : 'text-muted border-border'}">
+      <span class="w-1.5 h-1.5 rounded-full ${c.is_active ? 'bg-success' : 'bg-muted'}"></span>
+      @${c.username}
+    </span>
+  `).join('');
+}
+
+async function loadCollabLog() {
+  const data = await API.get(`/api/activity/${slug}/collab/tasks/${taskId}/logs/`);
+  if (!data) return;
+  const logs = data.results || data;
+  const el = document.getElementById('collab-log');
+  if (!logs.length) { el.innerHTML = '<span class="text-muted text-xs">No history yet</span>'; return; }
+  const labels = {
+    request_sent: 'requested collaboration',
+    request_accepted: 'accepted collaboration',
+    request_rejected: 'rejected collaboration',
+    request_cancelled: 'cancelled request',
+    collab_started: 'collaboration started',
+    collab_ended: 'left collaboration',
+  };
+  el.innerHTML = logs.map(l => {
+    const meta = l.metadata || {};
+    const extra = meta.target ? ` with @${meta.target}` : meta.with ? ` with @${meta.with}` : meta.requester ? ` from @${meta.requester}` : '';
+    return `<div class="flex items-center gap-2 py-1.5 border-b border-border/40 last:border-0">
+      <span class="text-accent font-mono">@${l.actor_username}</span>
+      <span class="text-muted">${labels[l.action_type] || l.action_type}${extra}</span>
+      <span class="ml-auto text-muted/60 text-xs">${new Date(l.timestamp).toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+// Collaboration modal
+async function openCollabModal() {
+  selectedTargets = [];
+  renderSelectedTargets();
+  document.getElementById('collab-message').value = '';
+  // Load all workspace members immediately
+  const results = await API.get(`/api/activity/${slug}/collab/members/?q=`);
+  const list = document.getElementById('collab-members-list');
+  if (!results || !results.length) {
+    list.innerHTML = '<div class="px-3 py-2 text-muted text-xs">No other developers in this workspace</div>';
+  } else {
+    renderMembersList(results);
+  }
+  const modal = document.getElementById('collab-modal');
+  const box = modal.querySelector('.modal-box');
+  modal.classList.remove('hidden');
+  box.style.animation = 'none';
+  requestAnimationFrame(() => { box.style.animation = ''; });
+}
+
+function renderMembersList(members) {
+  const list = document.getElementById('collab-members-list');
+  const available = members.filter(r => !selectedTargets.find(t => t.username === r.username));
+  if (!available.length) {
+    list.innerHTML = '<div class="px-3 py-2 text-muted text-xs">All members already selected</div>';
+    return;
+  }
+  list.innerHTML = available.map(r => `
+    <div class="px-3 py-2 text-sm text-white hover:bg-panel cursor-pointer flex items-center gap-3 border-b border-border/40 last:border-0"
+         onclick="selectTarget('${r.username}', '${r.full_name}')">
+      <div class="w-7 h-7 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-accent text-xs font-semibold flex-shrink-0">
+        ${r.username.charAt(0).toUpperCase()}
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-white text-xs font-medium">@${r.username}</div>
+        <div class="text-muted text-xs truncate">${r.full_name}</div>
+      </div>
+      <span class="text-muted text-xs">+ Select</span>
+    </div>
+  `).join('');
+}
+
+function closeCollabModal() {
+  document.getElementById('collab-modal').classList.add('hidden');
+}
+
+function selectTarget(username, fullName) {
+  if (selectedTargets.find(t => t.username === username)) return;
+  selectedTargets.push({ username, fullName });
+  renderSelectedTargets();
+  // Re-render list so selected member disappears from it
+  const allItems = [...document.querySelectorAll('#collab-members-list > div[onclick]')];
+  allItems.forEach(el => {
+    if (el.getAttribute('onclick').includes(`'${username}'`)) el.remove();
+  });
+  if (!document.querySelectorAll('#collab-members-list > div[onclick]').length) {
+    document.getElementById('collab-members-list').innerHTML = '<div class="px-3 py-2 text-muted text-xs">All members selected</div>';
+  }
+}
+
+function removeTarget(username) {
+  const removed = selectedTargets.find(t => t.username === username);
+  selectedTargets = selectedTargets.filter(t => t.username !== username);
+  renderSelectedTargets();
+  // Re-fetch and re-render so removed member reappears
+  API.get(`/api/activity/${slug}/collab/members/?q=`).then(results => {
+    if (results) renderMembersList(results);
+  });
+}
+
+function renderSelectedTargets() {
+  document.getElementById('selected-targets').innerHTML = selectedTargets.map(t => `
+    <span class="flex items-center gap-1 px-2 py-1 bg-accent/10 border border-accent/30 text-accent text-xs rounded-full">
+      @${t.username}
+      <button onclick="removeTarget('${t.username}')" class="ml-1 hover:text-danger">x</button>
+    </span>
+  `).join('') || '<span class="text-muted text-xs">No developers selected</span>';
+}
+
+async function sendCollabRequests() {
+  if (!selectedTargets.length) { toast('Select at least one developer', 'error'); return; }
+  const message = document.getElementById('collab-message').value.trim();
+  let sent = 0;
+  for (const t of selectedTargets) {
+    const res = await API.post(`/api/activity/${slug}/collab/request/`, {
+      target_username: t.username, task_id: taskId, message,
+    });
+    if (res && !res.error) sent++;
+    else toast(`${t.username}: ${res?.error || 'Failed'}`, 'error');
+  }
+  if (sent) toast(`Sent ${sent} collaboration request${sent > 1 ? 's' : ''}`, 'success');
+  closeCollabModal();
+  loadCollabLog();
+  loadCollaborators();
+}
+
+
 loadTask();
 loadComments();
+loadCollaborators();
+loadCollabLog();
 </script>
 {% endblock %}
