@@ -145,9 +145,8 @@
     <!-- Timeline Section -->
     <div id="section-timeline" class="p-6 hidden">
       <div class="flex flex-wrap items-center gap-2 mb-4">
-        <button onclick="setTimelinePeriod('week')" data-period="week" class="period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">This Week</button>
-        <button onclick="setTimelinePeriod('month')" data-period="month" class="period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">This Month</button>
-        <button onclick="setTimelinePeriod('30days')" data-period="30days" class="period-btn px-3 py-1.5 text-xs rounded border border-accent text-white transition">Last 30 Days</button>
+        <button onclick="setTimelinePeriod('7days')" data-period="7days" class="period-btn px-3 py-1.5 text-xs rounded border border-accent text-white transition">Last 7 Days</button>
+        <button onclick="setTimelinePeriod('month')" data-period="month" class="period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">Last Month</button>
         <button onclick="setTimelinePeriod('custom')" data-period="custom" class="period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">Custom</button>
         <div id="custom-range" class="hidden flex items-center gap-2">
           <input type="date" id="range-from" class="bg-panel border border-border rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:border-accent" />
@@ -255,7 +254,7 @@ function showSection(name) {
   document.getElementById('section-title').textContent = titles[name][0];
   document.getElementById('section-sub').textContent = titles[name][1];
   if (name === 'tasks') loadTasks();
-  if (name === 'timeline') { setTimelinePeriod('30days'); setTimelineTab('mine'); }
+  if (name === 'timeline') { setTimelinePeriod('7days'); setTimelineTab('mine'); }
   if (name === 'collab') setCollabTab('pending');
 }
 
@@ -459,19 +458,15 @@ async function doStop() {
 function getDateRange() {
   const today = new Date();
   const fmt = d => d.toISOString().split('T')[0];
-  const period = document.querySelector('.period-btn[data-period].border-accent')?.dataset.period || '30days';
-  if (period === 'week') {
-    const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
-    return { from: fmt(mon), to: fmt(today) };
-  }
+  const period = document.querySelector('.period-btn.border-accent')?.dataset.period || '7days';
   if (period === 'month') {
-    return { from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) };
+    const from = new Date(today); from.setMonth(today.getMonth() - 1);
+    return { from: fmt(from), to: fmt(today) };
   }
   if (period === 'custom') {
     return { from: document.getElementById('range-from').value, to: document.getElementById('range-to').value };
   }
-  // 30days default
-  const from = new Date(today); from.setDate(today.getDate() - 29);
+  const from = new Date(today); from.setDate(today.getDate() - 6);
   return { from: fmt(from), to: fmt(today) };
 }
 
@@ -480,8 +475,7 @@ function setTimelinePeriod(period) {
     const active = b.dataset.period === period;
     b.className = `period-btn px-3 py-1.5 text-xs rounded border transition ${active ? 'border-accent text-white' : 'border-border text-muted hover:text-white'}`;
   });
-  const customRange = document.getElementById('custom-range');
-  customRange.classList.toggle('hidden', period !== 'custom');
+  document.getElementById('custom-range').classList.toggle('hidden', period !== 'custom');
   if (period !== 'custom') loadTimelineRange();
 }
 

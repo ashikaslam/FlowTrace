@@ -102,12 +102,11 @@
     <!-- Timeline Section -->
     <div id="section-timeline" class="p-6 hidden">
       <div class="mb-4 flex flex-wrap items-center gap-2">
-        <select id="timeline-user" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent">
+        <select id="timeline-user" onchange="loadTimeline()" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent">
           <option value="">Select developer...</option>
         </select>
-        <button onclick="setMgrPeriod('week')" data-period="week" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">This Week</button>
-        <button onclick="setMgrPeriod('month')" data-period="month" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">This Month</button>
-        <button onclick="setMgrPeriod('30days')" data-period="30days" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-accent text-white transition">Last 30 Days</button>
+        <button onclick="setMgrPeriod('7days')" data-period="7days" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-accent text-white transition">Last 7 Days</button>
+        <button onclick="setMgrPeriod('month')" data-period="month" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">Last Month</button>
         <button onclick="setMgrPeriod('custom')" data-period="custom" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">Custom</button>
         <div id="mgr-custom-range" class="hidden flex items-center gap-2">
           <input type="date" id="mgr-range-from" class="bg-panel border border-border rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:border-accent" />
@@ -286,18 +285,16 @@ async function loadTimelineUsers() {
 function getMgrDateRange() {
   const today = new Date();
   const fmt = d => d.toISOString().split('T')[0];
-  const period = document.querySelector('.mgr-period-btn[data-period].border-accent')?.dataset.period || '30days';
-  if (period === 'week') {
-    const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
-    return { from: fmt(mon), to: fmt(today) };
-  }
+  const period = document.querySelector('.mgr-period-btn.border-accent')?.dataset.period || '7days';
   if (period === 'month') {
-    return { from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) };
+    const from = new Date(today); from.setMonth(today.getMonth() - 1);
+    return { from: fmt(from), to: fmt(today) };
   }
   if (period === 'custom') {
     return { from: document.getElementById('mgr-range-from').value, to: document.getElementById('mgr-range-to').value };
   }
-  const from = new Date(today); from.setDate(today.getDate() - 29);
+  // 7days default
+  const from = new Date(today); from.setDate(today.getDate() - 6);
   return { from: fmt(from), to: fmt(today) };
 }
 
