@@ -101,12 +101,20 @@
 
     <!-- Timeline Section -->
     <div id="section-timeline" class="p-6 hidden">
-      <div class="mb-4 flex items-center gap-4">
+      <div class="mb-4 flex flex-wrap items-center gap-2">
         <select id="timeline-user" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent">
           <option value="">Select developer...</option>
         </select>
-        <input type="date" id="timeline-date" class="bg-panel border border-border rounded-md px-3 py-1.5 text-white text-sm focus:outline-none focus:border-accent" />
-        <button onclick="loadTimeline()" class="px-4 py-1.5 bg-accent text-surface text-sm rounded-md hover:bg-blue-400 transition">Load</button>
+        <button onclick="setMgrPeriod('week')" data-period="week" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">This Week</button>
+        <button onclick="setMgrPeriod('month')" data-period="month" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">This Month</button>
+        <button onclick="setMgrPeriod('30days')" data-period="30days" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-accent text-white transition">Last 30 Days</button>
+        <button onclick="setMgrPeriod('custom')" data-period="custom" class="mgr-period-btn px-3 py-1.5 text-xs rounded border border-border text-muted hover:text-white transition">Custom</button>
+        <div id="mgr-custom-range" class="hidden flex items-center gap-2">
+          <input type="date" id="mgr-range-from" class="bg-panel border border-border rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:border-accent" />
+          <span class="text-muted text-xs">to</span>
+          <input type="date" id="mgr-range-to" class="bg-panel border border-border rounded-md px-2 py-1 text-white text-xs focus:outline-none focus:border-accent" />
+          <button onclick="loadTimeline()" class="px-3 py-1.5 bg-accent text-surface text-xs rounded-md hover:bg-blue-400 transition">Load</button>
+        </div>
       </div>
       <div id="timeline-view" class="timeline-line pl-8 space-y-4"></div>
     </div>
@@ -195,7 +203,7 @@ function showSection(name) {
   document.getElementById('section-title').textContent = titles[name][0];
   document.getElementById('section-sub').textContent = titles[name][1];
   if (name === 'developers') loadDevList();
-  if (name === 'timeline') loadTimelineUsers();
+  if (name === 'timeline') { loadTimelineUsers(); setMgrPeriod('30days'); }
   if (name === 'collaborations') loadWorkspaceCollaborations();
   if (name === 'profile') loadProfile();
 }
@@ -273,18 +281,44 @@ async function loadTimelineUsers() {
   const members = data.results || data;
   const sel = document.getElementById('timeline-user');
   sel.innerHTML = '<option value="">Select developer...</option>' + members.map(m => `<option value="${m.username}">${m.username}</option>`).join('');
-  document.getElementById('timeline-date').value = new Date().toISOString().split('T')[0];
+}
+
+function getMgrDateRange() {
+  const today = new Date();
+  const fmt = d => d.toISOString().split('T')[0];
+  const period = document.querySelector('.mgr-period-btn[data-period].border-accent')?.dataset.period || '30days';
+  if (period === 'week') {
+    const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
+    return { from: fmt(mon), to: fmt(today) };
+  }
+  if (period === 'month') {
+    return { from: fmt(new Date(today.getFullYear(), today.getMonth(), 1)), to: fmt(today) };
+  }
+  if (period === 'custom') {
+    return { from: document.getElementById('mgr-range-from').value, to: document.getElementById('mgr-range-to').value };
+  }
+  const from = new Date(today); from.setDate(today.getDate() - 29);
+  return { from: fmt(from), to: fmt(today) };
+}
+
+function setMgrPeriod(period) {
+  document.querySelectorAll('.mgr-period-btn').forEach(b => {
+    const active = b.dataset.period === period;
+    b.className = `mgr-period-btn px-3 py-1.5 text-xs rounded border transition ${active ? 'border-accent text-white' : 'border-border text-muted hover:text-white'}`;
+  });
+  document.getElementById('mgr-custom-range').classList.toggle('hidden', period !== 'custom');
+  if (period !== 'custom') loadTimeline();
 }
 
 async function loadTimeline() {
   const username = document.getElementById('timeline-user').value;
-  const date = document.getElementById('timeline-date').value;
   if (!username) return;
-  const data = await API.get(`/api/activity/${slug}/timeline/${username}/?date=${date}`);
+  const { from, to } = getMgrDateRange();
+  const data = await API.get(`/api/activity/${slug}/timeline/${username}/?date_from=${from}&date_to=${to}&page_size=200`);
   if (!data) return;
   const sessions = data.results || data;
   const container = document.getElementById('timeline-view');
-  if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No activity for this date.</div>'; return; }
+  if (!sessions.length) { container.innerHTML = '<div class="text-muted text-sm">No activity for this period.</div>'; return; }
   container.innerHTML = sessions.map(s => {
     const dur = s.duration_seconds;
     const mins = Math.floor(dur / 60);
@@ -304,7 +338,7 @@ async function loadTimeline() {
           </span>
         </div>
         <div class="flex items-center gap-4 text-xs text-muted">
-          <span>${new Date(s.started_at).toLocaleTimeString()} → ${ended}</span>
+          <span>${new Date(s.started_at).toLocaleString()} → ${ended}</span>
           <span>${mins}m</span>
           ${s.completion_at_end !== null ? `<span class="text-success">${s.completion_at_end}% done</span>` : ''}
         </div>
