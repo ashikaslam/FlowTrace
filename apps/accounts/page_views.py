@@ -1,4 +1,5 @@
 from django.shortcuts import render, redirect
+from django.contrib.auth import logout
 
 
 def landing(request):
@@ -14,7 +15,5 @@ def workspace_login_page(request, workspace_slug):
 
 
 def logout_page(request):
-    response = redirect("landing")
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
-    return response
+    logout(request)
+    return redirect("landing")

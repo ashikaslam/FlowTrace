@@ -2,13 +2,13 @@ from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework_simplejwt.views import TokenRefreshView
+from django.contrib.auth import authenticate, login, logout
+from django.http import JsonResponse
 
 from .models import User, WorkspaceMembership
 from .serializers import (
     RegisterSerializer, UserSerializer,
-    WorkspaceTokenSerializer, MembershipSerializer,
-    CreateDeveloperSerializer, UpdateProfileSerializer,
+    MembershipSerializer, CreateDeveloperSerializer, UpdateProfileSerializer,
 )
 from .utils import upload_to_imgbb
 from rest_framework.parsers import MultiPartParser
@@ -18,26 +18,15 @@ import secrets
 import string
 
 
-class RegisterView(generics.CreateAPIView):
-    serializer_class = RegisterSerializer
-    permission_classes = [AllowAny]
-
-
 class RegisterWithWorkspaceView(APIView):
-    """Single endpoint: create user + workspace + membership, return JWT."""
     permission_classes = [AllowAny]
 
     def post(self, request):
-        from apps.workspaces.models import Workspace
-        from apps.workspaces.serializers import WorkspaceCreateSerializer
-        from rest_framework_simplejwt.tokens import RefreshToken
-
         email = request.data.get("email", "").strip()
         full_name = request.data.get("full_name", "").strip()
         password = request.data.get("password", "")
         workspace_name = request.data.get("workspace_name", "").strip()
 
-        # Validate
         if not all([email, full_name, password, workspace_name]):
             return Response({"error": "All fields are required."}, status=400)
         if User.objects.filter(email=email).exists():
@@ -45,13 +34,9 @@ class RegisterWithWorkspaceView(APIView):
         if len(password) < 8:
             return Response({"password": ["Password must be at least 8 characters."]}, status=400)
 
-        # Create user
         user = User.objects.create_user(email=email, full_name=full_name, password=password)
-
-        # Create workspace (slug auto-generated)
         workspace = Workspace.objects.create(name=workspace_name, owner=user)
 
-        # Auto-derive manager username from email prefix
         base_username = email.split("@")[0][:50]
         username = base_username
         suffix = 1
@@ -66,16 +51,9 @@ class RegisterWithWorkspaceView(APIView):
             username=username,
         )
 
-        # Issue JWT
-        refresh = RefreshToken.for_user(user)
-        refresh["workspace_id"] = workspace.id
-        refresh["workspace_slug"] = workspace.slug
-        refresh["role"] = WorkspaceMembership.ROLE_MANAGER
-        refresh["username"] = username
+        login(request, user)
 
         return Response({
-            "access": str(refresh.access_token),
-            "refresh": str(refresh),
             "workspace_slug": workspace.slug,
             "workspace_name": workspace.name,
             "username": username,
@@ -88,9 +66,36 @@ class WorkspaceLoginView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        serializer = WorkspaceTokenSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        return Response(serializer.validated_data)
+        from apps.workspaces.models import Workspace
+        slug = request.data.get("workspace_slug", "").strip()
+        username = request.data.get("username", "").strip()
+        password = request.data.get("password", "")
+
+        try:
+            workspace = Workspace.objects.get(slug=slug)
+            membership = WorkspaceMembership.objects.select_related("user").get(
+                workspace=workspace, username=username, is_active=True
+            )
+        except Exception:
+            return Response({"error": "Invalid workspace, username, or password."}, status=400)
+
+        user = membership.user
+        if not user.check_password(password):
+            return Response({"error": "Invalid credentials."}, status=400)
+
+        login(request, user)
+
+        return Response({
+            "user": UserSerializer(user).data,
+            "workspace": workspace.slug,
+            "role": membership.role,
+        })
+
+
+class LogoutView(APIView):
+    def post(self, request):
+        logout(request)
+        return Response({"detail": "Logged out."})
 
 
 class MeView(generics.RetrieveUpdateAPIView):

@@ -76,20 +76,31 @@
   <script>
     const API = {
       async request(method, url, data = null) {
-        const token = localStorage.getItem('access_token');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || getCookie('csrftoken');
         const opts = {
           method,
-          headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+          headers: { 'Content-Type': 'application/json', ...(csrfToken ? { 'X-CSRFToken': csrfToken } : {}) },
+          credentials: 'same-origin',
         };
         if (data) opts.body = JSON.stringify(data);
-        const res = await fetch(url, opts);
-        if (res.status === 401) { window.location.href = '/'; return; }
+        let res;
+        try {
+          res = await fetch(url, opts);
+        } catch {
+          toast('Connection error. Retrying…', 'info');
+          return null;
+        }
+        if (res.status === 401 || res.status === 403) { window.location.href = '/'; return; }
         return res.json();
       },
       get: (url) => API.request('GET', url),
       post: (url, data) => API.request('POST', url, data),
       patch: (url, data) => API.request('PATCH', url, data),
     };
+    function getCookie(name) {
+      let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+      return v ? v[2] : null;
+    }
     function toast(msg, type = 'success') {
       const icons = { success: '✓', error: '✕', info: 'ℹ' };
       const el = document.createElement('div');

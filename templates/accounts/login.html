@@ -18,6 +18,7 @@
     <div class="bg-panel border border-border rounded-xl p-8">
       <div id="err" class="hidden mb-4 text-danger text-xs bg-danger/10 border border-danger/30 rounded p-3"></div>
       <form id="login-form" class="space-y-4">
+        {% csrf_token %}
         <input type="hidden" name="workspace_slug" value="{{ workspace_slug }}" />
         <div>
           <label class="text-muted text-xs mb-1 block">Username</label>
@@ -46,15 +47,15 @@ document.getElementById('login-form').addEventListener('submit', async (e) => {
   errEl.classList.add('hidden');
   const res = await fetch('/api/auth/login/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': fd.get('csrfmiddlewaretoken'),
+    },
     body: JSON.stringify(Object.fromEntries(fd)),
+    credentials: 'same-origin',
   });
   const data = await res.json();
-  if (!res.ok) { errEl.textContent = data.detail || JSON.stringify(data); errEl.classList.remove('hidden'); return; }
-  localStorage.setItem('access_token', data.access);
-  localStorage.setItem('refresh_token', data.refresh);
-  localStorage.setItem('workspace_slug', data.workspace);
-  localStorage.setItem('role', data.role);
+  if (!res.ok) { errEl.textContent = data.error || data.detail || JSON.stringify(data); errEl.classList.remove('hidden'); return; }
   const slug = data.workspace;
   window.location.href = data.role === 'manager' ? `/dashboard/${slug}/` : `/dashboard/${slug}/dev/`;
 });

@@ -159,13 +159,14 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
   try {
     const res = await fetch('/api/auth/register-workspace/', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
       body: JSON.stringify({
         email: fd.get('email'),
         full_name: fd.get('full_name'),
         password: fd.get('password'),
         workspace_name: fd.get('workspace_name'),
       }),
+      credentials: 'same-origin',
     });
 
     const data = await res.json();
@@ -176,12 +177,6 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
       errEl.classList.remove('hidden');
       return;
     }
-
-    // Store tokens
-    localStorage.setItem('access_token', data.access);
-    localStorage.setItem('refresh_token', data.refresh);
-    localStorage.setItem('workspace_slug', data.workspace_slug);
-    localStorage.setItem('role', data.role);
 
     // Store creds for popup
     credsData = {
@@ -203,6 +198,11 @@ document.getElementById('reg-form').addEventListener('submit', async (e) => {
     spinner.classList.add('hidden');
   }
 });
+
+function getCookie(name) {
+  let v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+  return v ? v[2] : null;
+}
 
 function showCredsModal() {
   document.getElementById('cred-workspace-name').textContent = credsData.workspace_name;
