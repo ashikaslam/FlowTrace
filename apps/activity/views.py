@@ -24,6 +24,21 @@ def get_membership(user, workspace_slug):
     )
 
 
+def _apply_date_filter(qs, params):
+    """Apply date or date range filter to a queryset on started_at."""
+    date = params.get("date")
+    date_from = params.get("date_from")
+    date_to = params.get("date_to")
+    if date:
+        qs = qs.filter(started_at__date=date)
+    else:
+        if date_from:
+            qs = qs.filter(started_at__date__gte=date_from)
+        if date_to:
+            qs = qs.filter(started_at__date__lte=date_to)
+    return qs
+
+
 class StartSessionView(APIView):
     permission_classes = [IsAuthenticated, IsWorkspaceMember]
 
@@ -65,10 +80,7 @@ class MyTimelineView(generics.ListAPIView):
     def get_queryset(self):
         membership = get_membership(self.request.user, self.kwargs["workspace_slug"])
         qs = ActivitySession.objects.filter(membership=membership).select_related("task")
-        date = self.request.query_params.get("date")
-        if date:
-            qs = qs.filter(started_at__date=date)
-        return qs
+        return _apply_date_filter(qs, self.request.query_params)
 
 
 class DeveloperTimelineView(generics.ListAPIView):
@@ -83,10 +95,7 @@ class DeveloperTimelineView(generics.ListAPIView):
             membership__workspace__slug=workspace_slug,
             membership__username=username,
         ).select_related("task")
-        date = self.request.query_params.get("date")
-        if date:
-            qs = qs.filter(started_at__date=date)
-        return qs
+        return _apply_date_filter(qs, self.request.query_params)
 
 
 class WorkspaceLiveStatusView(APIView):
@@ -381,7 +390,6 @@ class MyCollaborationTimelineView(generics.ListAPIView):
 
     def get_queryset(self):
         membership = get_membership(self.request.user, self.kwargs["workspace_slug"])
-        # Tasks where I am an active collaborator
         collab_task_ids = TaskCollaborator.objects.filter(
             member=membership
         ).values_list("task_id", flat=True)
@@ -389,10 +397,7 @@ class MyCollaborationTimelineView(generics.ListAPIView):
             task_id__in=collab_task_ids,
             task__workspace__slug=self.kwargs["workspace_slug"],
         ).select_related("task", "membership")
-        date = self.request.query_params.get("date")
-        if date:
-            qs = qs.filter(started_at__date=date)
-        return qs
+        return _apply_date_filter(qs, self.request.query_params)
 
 
 class WorkspaceCollaborationsView(APIView):
