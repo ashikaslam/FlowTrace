@@ -44,11 +44,7 @@ python manage.py runserver
 |----------|---------|-------------|
 | `DJANGO_ENV` | `development` | `development` or `production` |
 | `SECRET_KEY` | dev key | Django secret key — change in production |
-| `DB_NAME` | — | PostgreSQL database name (production) |
-| `DB_USER` | — | PostgreSQL user (production) |
-| `DB_PASSWORD` | — | PostgreSQL password (production) |
-| `DB_HOST` | `localhost` | PostgreSQL host |
-| `DB_PORT` | `5432` | PostgreSQL port |
+| `DATABASE_URL` | — | Full database URL (PostgreSQL in production) |
 | `ALLOWED_HOSTS` | — | Comma-separated allowed hosts (production) |
 | `CORS_ALLOWED_ORIGINS` | — | Comma-separated CORS origins (production) |
 

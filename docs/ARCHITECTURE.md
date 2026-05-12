@@ -22,11 +22,11 @@ This means the backend is already a proper API server. Migrating to React requir
 │  HTML Templates + Vanilla JS        │
 │  All data via fetch() → REST API    │
 └──────────────┬──────────────────────┘
-               │ HTTP/JSON
+               │ HTTP/JSON + session cookie
 ┌──────────────▼──────────────────────┐
 │         Django REST Framework       │
 │  Serializers → Views → URL routing  │
-│  JWT Authentication                 │
+│  Session Authentication             │
 │  Workspace-scoped permissions       │
 └──────────────┬──────────────────────┘
                │ ORM
@@ -42,7 +42,7 @@ Each Django app owns a single domain:
 
 | App | Responsibility |
 |-----|---------------|
-| `accounts` | User model, JWT auth, workspace membership |
+| `accounts` | User model, session auth, workspace membership |
 | `workspaces` | Workspace CRUD, permissions, stats |
 | `tasks` | Task lifecycle, attachments |
 | `activity` | Session tracking, switching, timeline — **core** |
@@ -77,9 +77,9 @@ Workspace slug always comes from the URL — never from the request body or JWT 
 
 ```
 config/settings/
-  ├── base.py         # Shared: apps, middleware, DRF, JWT
+  ├── base.py         # Shared: apps, middleware, DRF, session config
   ├── development.py  # SQLite, DEBUG=True, CORS allow all
-  └── production.py   # PostgreSQL, DEBUG=False, strict CORS
+  └── production.py   # PostgreSQL, DEBUG=False, strict CORS, secure cookies
 ```
 
 `DJANGO_ENV` environment variable controls which settings load.

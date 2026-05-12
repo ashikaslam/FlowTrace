@@ -15,17 +15,18 @@ Cross-workspace data access is structurally impossible — there are no global l
 
 ## Authentication
 
-- JWT tokens via `djangorestframework-simplejwt`
-- Access tokens expire in 8 hours
-- Refresh tokens expire in 7 days
-- Token payload includes `workspace_id`, `workspace_slug`, `role` for client-side routing
-- Token claims are NOT used for server-side authorization — workspace slug from URL is always re-verified
+- Django session authentication via `django.contrib.sessions`
+- Session cookie (`sessionid`) is `HttpOnly`, `SameSite=Lax`, and `Secure` in production
+- Sessions last 30 days (`SESSION_COOKIE_AGE`), renewed on every request (`SESSION_SAVE_EVERY_REQUEST`)
+- `SESSION_EXPIRE_AT_BROWSER_CLOSE = False` — sessions survive browser restarts
+- CSRF protection enforced on all mutating requests via `X-CSRFToken` header
+- No tokens stored in `localStorage` — eliminates XSS token theft risk
 
 ## Authorization Levels
 
 | Permission Class | Requirement |
 |-----------------|-------------|
-| `IsAuthenticated` | Valid JWT token |
+| `IsAuthenticated` | Active Django session |
 | `IsWorkspaceMember` | Active membership in URL workspace |
 | `IsWorkspaceManager` | Membership with `role=manager` |
 
@@ -49,7 +50,8 @@ Manager-only operations: creating developers, viewing all developer timelines, w
 
 - Passwords are hashed via Django's `AbstractBaseUser` (PBKDF2 by default)
 - Generated developer passwords are returned once at creation time and never stored in plaintext
-- JWT secret key loaded from environment variable — never hardcoded
+- `SECRET_KEY` loaded from environment variable — never hardcoded
+- No JWTs or bearer tokens — session IDs are opaque and server-side only
 
 ## Production Checklist
 
@@ -61,3 +63,4 @@ Manager-only operations: creating developers, viewing all developer timelines, w
 - [ ] Use PostgreSQL
 - [ ] Serve media files via nginx (not Django)
 - [ ] Enable HTTPS / configure `SECURE_SSL_REDIRECT`
+- [ ] Confirm `SESSION_COOKIE_SECURE=True` and `CSRF_COOKIE_SECURE=True` (set automatically in production.py)

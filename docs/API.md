@@ -2,35 +2,41 @@
 
 ## Authentication
 
-All endpoints (except register and login) require a JWT Bearer token.
+All endpoints (except login and register-workspace) require an active Django session. The session cookie is set automatically on login and sent by the browser on every request — no manual token handling needed.
+
+All mutating requests (`POST`, `PATCH`, `PUT`, `DELETE`) must include the CSRF token:
 
 ```
-Authorization: Bearer <access_token>
+X-CSRFToken: <value of csrftoken cookie>
 ```
-
-Tokens are workspace-scoped — the JWT payload includes `workspace_id`, `workspace_slug`, and `role`.
 
 ---
 
 ## Auth Endpoints
 
-### POST /api/auth/register/
-Create a new user account.
+### POST /api/auth/register-workspace/
+Create a new user account + workspace in one step. Sets session cookie on success.
 
 **Request:**
 ```json
-{ "email": "jane@company.com", "full_name": "Jane Smith", "password": "securepass" }
+{ "email": "jane@company.com", "full_name": "Jane Smith", "password": "securepass", "workspace_name": "My Company" }
 ```
 
 **Response:** `201`
 ```json
-{ "id": 1, "email": "jane@company.com", "full_name": "Jane Smith", "created_at": "..." }
+{
+  "workspace_slug": "tech-soft-x92k",
+  "workspace_name": "My Company",
+  "username": "jane",
+  "role": "manager",
+  "login_url": "/workspace/tech-soft-x92k/login/"
+}
 ```
 
 ---
 
 ### POST /api/auth/login/
-Login with workspace credentials.
+Login with workspace credentials. Sets session cookie on success.
 
 **Request:**
 ```json
@@ -40,8 +46,6 @@ Login with workspace credentials.
 **Response:** `200`
 ```json
 {
-  "access": "<jwt>",
-  "refresh": "<jwt>",
   "user": { "id": 1, "email": "...", "full_name": "..." },
   "workspace": "tech-soft-x92k",
   "role": "manager"
@@ -50,10 +54,10 @@ Login with workspace credentials.
 
 ---
 
-### POST /api/auth/token/refresh/
-Refresh access token.
+### POST /api/auth/logout/
+Destroy the current session.
 
-**Request:** `{ "refresh": "<refresh_token>" }`
+**Response:** `200` `{ "detail": "Logged out." }`
 
 ---
 
@@ -531,7 +535,7 @@ The largest realistic JSON payload in FlowTrace is a task with a long descriptio
 | Status | Meaning |
 |--------|---------|
 | 400 | Validation error — check `detail` or field errors |
-| 401 | Missing or invalid token |
+| 401 | Not authenticated (no active session) |
 | 403 | Not a workspace member or insufficient role |
 | 404 | Resource not found |
 
