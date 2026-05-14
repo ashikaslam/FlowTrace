@@ -1,0 +1,156 @@
+{% extends "base/layout.html" %}
+{% block title %}Note — FlowTrace{% endblock %}
+{% block body %}
+<div class="min-h-screen p-6 max-w-2xl mx-auto">
+
+  <!-- Back -->
+  <div class="mb-6">
+    <a id="back-link" href="#" class="text-muted text-sm hover:text-white transition">← Back</a>
+  </div>
+
+  <!-- Note card -->
+  <div id="note-card" class="rounded-2xl border p-8 min-h-48">
+    <div class="text-muted text-xs mb-6" id="note-meta">Loading...</div>
+    <p id="note-content" class="text-white text-sm leading-relaxed whitespace-pre-wrap"></p>
+  </div>
+
+  <!-- Actions -->
+  <div id="note-actions" class="hidden flex items-center gap-3 mt-5">
+    <button id="pin-btn" onclick="togglePin()" class="px-4 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition"></button>
+    <button onclick="openEdit()" class="px-4 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">✎ Edit</button>
+    <button onclick="deleteNote()" class="px-4 py-2 border border-danger/40 text-danger text-sm rounded-md hover:bg-danger hover:text-surface transition">✕ Delete</button>
+  </div>
+
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+    <h3 class="text-white font-semibold mb-4">Edit Note</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-muted text-xs mb-1 block">Note</label>
+        <textarea id="edit-content" rows="8" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
+      </div>
+      {% comment %}Visibility select only shown for managers — rendered dynamically{% endcomment %}
+      <div id="edit-type-wrap" class="hidden">
+        <label class="text-muted text-xs mb-1 block">Visibility</label>
+        <select id="edit-type" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
+          <option value="personal">Personal</option>
+          <option value="team">Team</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal()" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="saveEdit()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const slug = '{{ workspace_slug }}';
+const noteId = {{ note_id }};
+const NOTE_COLORS = {
+  yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30' },
+  green:  { bg: 'bg-green-500/10',  border: 'border-green-500/30' },
+  red:    { bg: 'bg-red-500/10',    border: 'border-red-500/30' },
+  blue:   { bg: 'bg-blue-500/10',   border: 'border-blue-500/30' },
+};
+let note = null;
+
+// Back link — go to the right dashboard based on role stored in session
+document.getElementById('back-link').href = `/dashboard/${slug}/`;
+
+async function loadNote() {
+  const data = await API.get(`/api/notes/${slug}/${noteId}/`);
+  if (!data || data.detail) {
+    document.getElementById('note-card').innerHTML = '<p class="text-muted text-sm">Note not found or you do not have access.</p>';
+    return;
+  }
+  note = data;
+  render();
+}
+
+function render() {
+  const c = NOTE_COLORS[note.color] || NOTE_COLORS.yellow;
+  const card = document.getElementById('note-card');
+  card.className = `rounded-2xl border p-8 min-h-48 ${c.bg} ${c.border}`;
+
+  const teamBadge = note.note_type === 'team'
+    ? `<span class="px-2 py-0.5 bg-accent/10 border border-accent/30 text-accent text-xs rounded mr-2">team</span>`
+    : '';
+  const pinLabel = note.is_pinned ? '📌 Pinned' : '📍 Not pinned';
+  document.getElementById('note-meta').innerHTML =
+    `${teamBadge}by <span class="text-white">${note.created_by_username}</span> &middot; ${new Date(note.updated_at).toLocaleString()}`;
+
+  document.getElementById('note-content').textContent = note.content;
+
+  const pinBtn = document.getElementById('pin-btn');
+  pinBtn.textContent = note.is_pinned ? '📌 Unpin' : '📍 Pin';
+
+  document.getElementById('note-actions').classList.remove('hidden');
+}
+
+async function togglePin() {
+  const res = await API.post(`/api/notes/${slug}/${noteId}/pin/`, {});
+  if (res && res.is_pinned !== undefined) {
+    note.is_pinned = res.is_pinned;
+    render();
+    toast(note.is_pinned ? 'Note pinned' : 'Note unpinned', 'info');
+  }
+}
+
+function openEdit() {
+  document.getElementById('edit-content').value = note.content;
+  // Show visibility selector only for managers
+  if (note.created_by_role === 'manager') {
+    document.getElementById('edit-type-wrap').classList.remove('hidden');
+    document.getElementById('edit-type').value = note.note_type;
+  }
+  document.getElementById('edit-modal').classList.remove('hidden');
+}
+
+function closeModal() {
+  document.getElementById('edit-modal').classList.add('hidden');
+}
+
+async function saveEdit() {
+  const content = document.getElementById('edit-content').value.trim();
+  if (!content) { toast('Note cannot be empty', 'error'); return; }
+  const payload = { content };
+  const typeWrap = document.getElementById('edit-type-wrap');
+  if (!typeWrap.classList.contains('hidden')) {
+    payload.note_type = document.getElementById('edit-type').value;
+  }
+  const res = await API.patch(`/api/notes/${slug}/${noteId}/`, payload);
+  if (res && res.id) {
+    note = res;
+    render();
+    closeModal();
+    toast('Note updated', 'success');
+  } else {
+    toast(res?.content?.[0] || res?.error || 'Failed to save', 'error');
+  }
+}
+
+async function deleteNote() {
+  if (!confirm('Delete this note?')) return;
+  const res = await fetch(`/api/notes/${slug}/${noteId}/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': getCookie('csrftoken') },
+    credentials: 'same-origin',
+  });
+  if (res.status === 204) {
+    toast('Note deleted', 'info');
+    setTimeout(() => { window.location.href = `/dashboard/${slug}/`; }, 800);
+  } else {
+    toast('Failed to delete', 'error');
+  }
+}
+
+loadNote();
+</script>
+{% endblock %}

@@ -767,6 +767,8 @@ function renderNote(n) {
   const c = NOTE_COLORS[n.color] || NOTE_COLORS.yellow;
   const teamBadge = n.note_type === 'team' ? `<span class="text-xs px-1.5 py-0.5 bg-accent/10 border border-accent/30 text-accent rounded">team</span>` : '';
   const pinIcon = n.is_pinned ? '📌' : '📍';
+  const words = n.content.trim().split(/\s+/);
+  const preview = words.slice(0, 30).join(' ') + (words.length > 30 ? '…' : '');
   return `
   <div class="${c.bg} border ${c.border} rounded-xl p-4 flex flex-col gap-2 relative group">
     <div class="flex items-start justify-between gap-2">
@@ -777,7 +779,7 @@ function renderNote(n) {
         <button onclick="deleteNote(${n.id})" class="text-muted hover:text-danger text-xs p-1 rounded transition" title="Delete">✕</button>
       </div>
     </div>
-    <p class="text-white text-xs leading-relaxed whitespace-pre-wrap flex-1">${n.content}</p>
+    <a href="/notes/${slug}/${n.id}/" class="text-white text-xs leading-relaxed flex-1 hover:text-accent transition">${preview}</a>
     <div class="flex items-center justify-between mt-1">
       ${teamBadge}
       <span class="text-muted text-xs ml-auto">${new Date(n.updated_at).toLocaleDateString()}</span>

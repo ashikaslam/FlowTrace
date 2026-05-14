@@ -10,6 +10,7 @@ urlpatterns = [
     path("dashboard/", include("apps.workspaces.urls")),
     path("tasks/", include("apps.tasks.urls")),
     path("activity/", include("apps.activity.urls")),
+    path("notes/", include("apps.notes.urls")),
     # REST API routes
     path("api/auth/", include("apps.accounts.api_urls")),
     path("api/workspaces/", include("apps.workspaces.api_urls")),
