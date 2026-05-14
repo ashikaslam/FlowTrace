@@ -17,6 +17,7 @@ User (global)
   │         │       └──< ActivitySession
   │         │
   │         ├──< ActivitySession
+  │         ├──< QuickNote (workspace-scoped)
   │         └──── DeveloperStatus (1:1)
   │
   │    Task also has:
@@ -191,6 +192,35 @@ Permanent, append-only audit trail of every collaboration event on a task.
 **Index**: `(task, timestamp)` for chronological log queries.
 
 **History preservation**: Log rows are NEVER deleted. They form the permanent collaboration audit trail alongside `ActivitySession`.
+
+---
+
+## Quick Notes
+
+### QuickNote
+Lightweight workspace-scoped note. Personal notes are private to the creator; team notes are visible to all workspace members.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | BigInt PK | |
+| workspace | FK → Workspace | |
+| created_by | FK → WorkspaceMembership | |
+| title | CharField(200) | required |
+| content | TextField | optional |
+| color | CharField | `yellow`, `green`, `red`, `blue` |
+| note_type | CharField | `personal` or `team` |
+| is_pinned | Boolean | pinned notes sort first |
+| created_at | DateTime | |
+| updated_at | DateTime | auto |
+
+**Indexes**: `(workspace, note_type)`, `(workspace, created_by)`, `(workspace, is_pinned)`
+
+**Ordering**: `-is_pinned`, `-updated_at` — pinned notes always appear first.
+
+**Access rules**:
+- Developers see their own personal notes + all team notes in the workspace
+- Managers see all notes
+- Only the owner (or a manager for team notes) can edit or delete a note
 
 ## Multi-Tenant Isolation Strategy
 

@@ -24,6 +24,7 @@ INSTALLED_APPS = [
     "apps.tasks",
     "apps.activity",
     "apps.comments",
+    "apps.notes",
 ]
 
 MIDDLEWARE = [

@@ -512,10 +512,58 @@ My unread mentions.
 ### POST /api/comments/{workspace_slug}/mentions/{mention_id}/read/
 Mark a mention as read.
 
----
-
 ### GET /api/comments/{workspace_slug}/suggest/?q=jo
 Autocomplete @mention suggestions. Returns list of matching usernames.
+
+---
+
+## Quick Notes Endpoints
+
+### GET /api/notes/{workspace_slug}/
+List notes visible to the current user.
+- Developers see their own personal notes + all team notes
+- Managers see all notes (personal and team)
+
+Response is ordered by pinned first, then most recently updated.
+
+---
+
+### POST /api/notes/{workspace_slug}/
+Create a note.
+
+**Request:**
+```json
+{ "title": "Remember to update staging", "content": "Deploy by Friday", "color": "yellow", "note_type": "personal" }
+```
+
+- Developers can only create `personal` notes (the `note_type` field is ignored and forced to `personal`)
+- Managers can create `personal` or `team` notes
+
+**Response:** `201` — QuickNote object
+
+---
+
+### PATCH /api/notes/{workspace_slug}/{note_id}/
+Update a note. Owner only (managers can also edit team notes).
+
+**Request:** Any subset of `title`, `content`, `color`, `note_type`, `is_pinned`
+
+---
+
+### DELETE /api/notes/{workspace_slug}/{note_id}/
+Delete a note. Owner only (managers can also delete team notes).
+
+**Response:** `204 No Content`
+
+---
+
+### POST /api/notes/{workspace_slug}/{note_id}/pin/
+Toggle pin status of a note. Owner or manager only.
+
+**Response:**
+```json
+{ "is_pinned": true }
+```
 
 ---
 

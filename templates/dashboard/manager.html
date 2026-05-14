@@ -30,6 +30,9 @@
       <a href="#" onclick="showSection('collaborations')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
         <span>🤝</span> Collaborations
       </a>
+      <a href="#" onclick="showSection('notes')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
+        <span>📝</span> Quick Notes
+      </a>
       <a href="#" onclick="showSection('profile')" class="nav-item flex items-center gap-2 px-3 py-2 rounded-md text-sm text-muted hover:text-white hover:bg-surface transition">
         <span>&#9881;</span> My Profile
       </a>
@@ -153,6 +156,16 @@
       <div id="collab-workspace-list" class="space-y-3"></div>
     </div>
 
+    <!-- Notes Section -->
+    <div id="section-notes" class="p-6 hidden">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-white text-sm font-medium">Quick Notes</h2>
+        <button onclick="openNoteModal()" class="px-3 py-1.5 bg-accent text-surface text-xs font-medium rounded-md hover:bg-blue-400 transition">+ New Note</button>
+      </div>
+      <div id="notes-pinned" class="mb-5"></div>
+      <div id="notes-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+    </div>
+
     <!-- Profile Section -->
     <div id="section-profile" class="p-6 hidden">
       <div class="max-w-md">
@@ -195,15 +208,16 @@ const slug = '{{ workspace_slug }}';
 document.body.dataset.workspace = slug;
 
 function showSection(name) {
-  ['overview','developers','timeline','team','collaborations','profile'].forEach(s => {
+  ['overview','developers','timeline','team','collaborations','notes','profile'].forEach(s => {
     document.getElementById(`section-${s}`).classList.toggle('hidden', s !== name);
   });
-  const titles = { overview: ['Overview','Live workspace activity'], developers: ['Developers','All workspace members'], timeline: ['Timeline','Developer activity timeline'], team: ['Team Management','Add developers to workspace'], collaborations: ['Collaborations','Active multi-developer tasks'], profile: ['My Profile','Update your account details'] };
+  const titles = { overview: ['Overview','Live workspace activity'], developers: ['Developers','All workspace members'], timeline: ['Timeline','Developer activity timeline'], team: ['Team Management','Add developers to workspace'], collaborations: ['Collaborations','Active multi-developer tasks'], notes: ['Quick Notes','Personal and team notes'], profile: ['My Profile','Update your account details'] };
   document.getElementById('section-title').textContent = titles[name][0];
   document.getElementById('section-sub').textContent = titles[name][1];
   if (name === 'developers') loadDevList();
   if (name === 'timeline') { loadTimelineUsers(); setMgrPeriod('30days'); }
   if (name === 'collaborations') loadWorkspaceCollaborations();
+  if (name === 'notes') loadNotes();
   if (name === 'profile') loadProfile();
 }
 
@@ -490,5 +504,143 @@ document.getElementById('profile-form').addEventListener('submit', async (e) => 
     errEl.textContent = msg; errEl.classList.remove('hidden');
   }
 });
+
+// ── Quick Notes ─────────────────────────────────────────────
+let editingNoteId = null;
+
+function openNoteModal(note = null) {
+  editingNoteId = note ? note.id : null;
+  document.getElementById('note-modal-title').textContent = note ? 'Edit Note' : 'New Note';
+  document.getElementById('note-title-input').value = note ? note.title : '';
+  document.getElementById('note-content-input').value = note ? note.content : '';
+  document.getElementById('note-color-select').value = note ? note.color : 'yellow';
+  document.getElementById('note-type-select').value = note ? note.note_type : 'personal';
+  openModal('note-modal');
+}
+
+async function saveNote() {
+  const title = document.getElementById('note-title-input').value.trim();
+  if (!title) { toast('Title is required', 'error'); return; }
+  const payload = {
+    title,
+    content: document.getElementById('note-content-input').value.trim(),
+    color: document.getElementById('note-color-select').value,
+    note_type: document.getElementById('note-type-select').value,
+  };
+  const res = editingNoteId
+    ? await API.patch(`/api/notes/${slug}/${editingNoteId}/`, payload)
+    : await API.post(`/api/notes/${slug}/`, payload);
+  if (res && res.id) {
+    toast(editingNoteId ? 'Note updated' : 'Note created', 'success');
+    closeModal('note-modal');
+    loadNotes();
+  } else {
+    toast(res?.title?.[0] || res?.error || 'Failed to save note', 'error');
+  }
+}
+
+async function deleteNote(id) {
+  if (!confirm('Delete this note?')) return;
+  const res = await fetch(`/api/notes/${slug}/${id}/`, {
+    method: 'DELETE', headers: { 'X-CSRFToken': getCookie('csrftoken') }, credentials: 'same-origin',
+  });
+  if (res.status === 204) { toast('Note deleted', 'info'); loadNotes(); }
+  else { toast('Failed to delete', 'error'); }
+}
+
+async function togglePin(id) {
+  const res = await API.post(`/api/notes/${slug}/${id}/pin/`, {});
+  if (res && res.is_pinned !== undefined) loadNotes();
+}
+
+async function loadNotes() {
+  const data = await API.get(`/api/notes/${slug}/`);
+  if (!data) return;
+  const notes = data.results || data;
+  const pinned = notes.filter(n => n.is_pinned);
+  const unpinned = notes.filter(n => !n.is_pinned);
+  const pinnedEl = document.getElementById('notes-pinned');
+  const listEl = document.getElementById('notes-list');
+  if (pinned.length) {
+    pinnedEl.innerHTML = `<div class="text-muted text-xs uppercase tracking-wider mb-2">📌 Pinned</div><div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">${pinned.map(renderNote).join('')}</div>`;
+  } else {
+    pinnedEl.innerHTML = '';
+  }
+  listEl.innerHTML = unpinned.length ? unpinned.map(renderNote).join('') : '<div class="text-muted text-sm col-span-3 text-center py-8">No notes yet. Create one!</div>';
+}
+
+const NOTE_COLORS = {
+  yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', dot: 'bg-yellow-400' },
+  green:  { bg: 'bg-green-500/10',  border: 'border-green-500/30',  dot: 'bg-green-400' },
+  red:    { bg: 'bg-red-500/10',    border: 'border-red-500/30',    dot: 'bg-red-400' },
+  blue:   { bg: 'bg-blue-500/10',   border: 'border-blue-500/30',   dot: 'bg-blue-400' },
+};
+
+function renderNote(n) {
+  const c = NOTE_COLORS[n.color] || NOTE_COLORS.yellow;
+  const teamBadge = n.note_type === 'team' ? `<span class="text-xs px-1.5 py-0.5 bg-accent/10 border border-accent/30 text-accent rounded">team</span>` : '';
+  const pinIcon = n.is_pinned ? '📌' : '📍';
+  return `
+  <div class="${c.bg} border ${c.border} rounded-xl p-4 flex flex-col gap-2 relative group">
+    <div class="flex items-start justify-between gap-2">
+      <div class="flex items-center gap-2 flex-1 min-w-0">
+        <span class="w-2 h-2 rounded-full ${c.dot} flex-shrink-0"></span>
+        <span class="text-white text-sm font-medium truncate">${n.title}</span>
+      </div>
+      <div class="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+        <button onclick="togglePin(${n.id})" class="text-muted hover:text-white text-xs p-1 rounded transition" title="${n.is_pinned ? 'Unpin' : 'Pin'}">${pinIcon}</button>
+        <button onclick="openNoteModal(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="text-muted hover:text-white text-xs p-1 rounded transition" title="Edit">✎</button>
+        <button onclick="deleteNote(${n.id})" class="text-muted hover:text-danger text-xs p-1 rounded transition" title="Delete">✕</button>
+      </div>
+    </div>
+    ${n.content ? `<p class="text-muted text-xs leading-relaxed whitespace-pre-wrap">${n.content}</p>` : ''}
+    <div class="flex items-center justify-between mt-1">
+      <div class="flex items-center gap-2">
+        ${teamBadge}
+        <span class="text-muted text-xs">${n.created_by_username}</span>
+      </div>
+      <span class="text-muted text-xs">${new Date(n.updated_at).toLocaleDateString()}</span>
+    </div>
+  </div>`;
+}
 </script>
+
+<!-- Note Modal -->
+<div id="note-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+    <h3 id="note-modal-title" class="text-white font-semibold mb-4">New Note</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-muted text-xs mb-1 block">Title</label>
+        <input id="note-title-input" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
+      </div>
+      <div>
+        <label class="text-muted text-xs mb-1 block">Content (optional)</label>
+        <textarea id="note-content-input" rows="4" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
+      </div>
+      <div class="flex gap-3">
+        <div class="flex-1">
+          <label class="text-muted text-xs mb-1 block">Color</label>
+          <select id="note-color-select" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
+            <option value="yellow">🟡 Yellow</option>
+            <option value="green">🟢 Green</option>
+            <option value="red">🔴 Red</option>
+            <option value="blue">🔵 Blue</option>
+          </select>
+        </div>
+        <div class="flex-1">
+          <label class="text-muted text-xs mb-1 block">Visibility</label>
+          <select id="note-type-select" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
+            <option value="personal">Personal</option>
+            <option value="team">Team</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal('note-modal')" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="saveNote()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Save</button>
+    </div>
+  </div>
+</div>
 {% endblock %}

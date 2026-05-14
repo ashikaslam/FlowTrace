@@ -16,4 +16,5 @@ urlpatterns = [
     path("api/tasks/", include("apps.tasks.api_urls")),
     path("api/activity/", include("apps.activity.api_urls")),
     path("api/comments/", include("apps.comments.api_urls")),
+    path("api/notes/", include("apps.notes.api_urls")),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
