@@ -167,13 +167,13 @@
     </div>
 
     <!-- Notes Section -->
-    <div id="section-notes" class="p-6 hidden">
+    <div id="section-notes" class="p-4 sm:p-6 hidden">
       <div class="flex items-center justify-between mb-4">
         <h2 class="text-white text-sm font-medium">Quick Notes</h2>
         <button onclick="openNoteModal()" class="px-3 py-1.5 bg-accent text-surface text-xs font-medium rounded-md hover:bg-blue-400 transition">+ New Note</button>
       </div>
       <div id="notes-pinned" class="mb-5"></div>
-      <div id="notes-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      <div id="notes-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
     </div>
 
   </main>
@@ -243,6 +243,23 @@
         <button type="submit" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Create</button>
       </div>
     </form>
+  </div>
+</div>
+
+<!-- Note Modal -->
+<div id="note-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
+  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
+    <h3 id="note-modal-title" class="text-white font-semibold mb-4">New Note</h3>
+    <div class="space-y-3">
+      <div>
+        <label class="text-muted text-xs mb-1 block">Note</label>
+        <textarea id="note-content-input" rows="5" placeholder="Write your note..." class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="closeModal('note-modal')" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
+      <button onclick="saveNote()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Save</button>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -787,21 +804,4 @@ function renderNote(n) {
   </div>`;
 }
 </script>
-
-<!-- Note Modal -->
-<div id="note-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 px-4">
-  <div class="modal-box bg-panel border border-border rounded-xl p-6 w-full max-w-md">
-    <h3 id="note-modal-title" class="text-white font-semibold mb-4">New Note</h3>
-    <div class="space-y-3">
-      <div>
-        <label class="text-muted text-xs mb-1 block">Note</label>
-        <textarea id="note-content-input" rows="5" placeholder="Write your note..." class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
-      </div>
-    </div>
-    <div class="flex gap-2 mt-4">
-      <button onclick="closeModal('note-modal')" class="flex-1 py-2 border border-border text-muted text-sm rounded-md hover:text-white transition">Cancel</button>
-      <button onclick="saveNote()" class="flex-1 py-2 bg-accent text-surface text-sm font-medium rounded-md hover:bg-blue-400 transition">Save</button>
-    </div>
-  </div>
-</div>
 {% endblock %}
