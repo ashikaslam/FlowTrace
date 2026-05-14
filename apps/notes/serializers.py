@@ -9,13 +9,14 @@ class QuickNoteSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuickNote
         fields = [
-            "id", "title", "content", "color", "note_type", "is_pinned",
+            "id", "content", "color", "note_type", "is_pinned",
             "created_by_username", "created_by_role", "created_at", "updated_at",
         ]
-        read_only_fields = ["created_at", "updated_at"]
+        read_only_fields = ["color", "created_at", "updated_at"]
 
 
 class QuickNoteWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = QuickNote
-        fields = ["title", "content", "color", "note_type", "is_pinned"]
+        fields = ["id", "content", "note_type", "is_pinned"]
+        read_only_fields = ["id"]

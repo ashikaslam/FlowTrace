@@ -705,20 +705,14 @@ let editingNoteId = null;
 function openNoteModal(note = null) {
   editingNoteId = note ? note.id : null;
   document.getElementById('note-modal-title').textContent = note ? 'Edit Note' : 'New Note';
-  document.getElementById('note-title-input').value = note ? note.title : '';
   document.getElementById('note-content-input').value = note ? note.content : '';
-  document.getElementById('note-color-select').value = note ? note.color : 'yellow';
   openModal('note-modal');
 }
 
 async function saveNote() {
-  const title = document.getElementById('note-title-input').value.trim();
-  if (!title) { toast('Title is required', 'error'); return; }
-  const payload = {
-    title,
-    content: document.getElementById('note-content-input').value.trim(),
-    color: document.getElementById('note-color-select').value,
-  };
+  const content = document.getElementById('note-content-input').value.trim();
+  if (!content) { toast('Note cannot be empty', 'error'); return; }
+  const payload = { content };
   const res = editingNoteId
     ? await API.patch(`/api/notes/${slug}/${editingNoteId}/`, payload)
     : await API.post(`/api/notes/${slug}/`, payload);
@@ -727,7 +721,7 @@ async function saveNote() {
     closeModal('note-modal');
     loadNotes();
   } else {
-    toast(res?.title?.[0] || res?.error || 'Failed to save note', 'error');
+    toast(res?.content?.[0] || res?.error || 'Failed to save note', 'error');
   }
 }
 
@@ -776,17 +770,14 @@ function renderNote(n) {
   return `
   <div class="${c.bg} border ${c.border} rounded-xl p-4 flex flex-col gap-2 relative group">
     <div class="flex items-start justify-between gap-2">
-      <div class="flex items-center gap-2 flex-1 min-w-0">
-        <span class="w-2 h-2 rounded-full ${c.dot} flex-shrink-0"></span>
-        <span class="text-white text-sm font-medium truncate">${n.title}</span>
-      </div>
-      <div class="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+      <span class="w-2 h-2 rounded-full ${c.dot} flex-shrink-0 mt-1"></span>
+      <div class="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition ml-auto">
         <button onclick="togglePin(${n.id})" class="text-muted hover:text-white text-xs p-1 rounded transition" title="${n.is_pinned ? 'Unpin' : 'Pin'}">${pinIcon}</button>
         <button onclick="openNoteModal(${JSON.stringify(n).replace(/"/g, '&quot;')})" class="text-muted hover:text-white text-xs p-1 rounded transition" title="Edit">✎</button>
         <button onclick="deleteNote(${n.id})" class="text-muted hover:text-danger text-xs p-1 rounded transition" title="Delete">✕</button>
       </div>
     </div>
-    ${n.content ? `<p class="text-muted text-xs leading-relaxed whitespace-pre-wrap">${n.content}</p>` : ''}
+    <p class="text-white text-xs leading-relaxed whitespace-pre-wrap flex-1">${n.content}</p>
     <div class="flex items-center justify-between mt-1">
       ${teamBadge}
       <span class="text-muted text-xs ml-auto">${new Date(n.updated_at).toLocaleDateString()}</span>
@@ -801,21 +792,8 @@ function renderNote(n) {
     <h3 id="note-modal-title" class="text-white font-semibold mb-4">New Note</h3>
     <div class="space-y-3">
       <div>
-        <label class="text-muted text-xs mb-1 block">Title</label>
-        <input id="note-title-input" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent" />
-      </div>
-      <div>
-        <label class="text-muted text-xs mb-1 block">Content (optional)</label>
-        <textarea id="note-content-input" rows="4" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
-      </div>
-      <div>
-        <label class="text-muted text-xs mb-1 block">Color</label>
-        <select id="note-color-select" class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent">
-          <option value="yellow">🟡 Yellow</option>
-          <option value="green">🟢 Green</option>
-          <option value="red">🔴 Red</option>
-          <option value="blue">🔵 Blue</option>
-        </select>
+        <label class="text-muted text-xs mb-1 block">Note</label>
+        <textarea id="note-content-input" rows="5" placeholder="Write your note..." class="w-full bg-surface border border-border rounded-md px-3 py-2 text-white text-sm focus:outline-none focus:border-accent resize-none"></textarea>
       </div>
     </div>
     <div class="flex gap-2 mt-4">

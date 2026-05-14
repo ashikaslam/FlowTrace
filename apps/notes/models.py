@@ -1,3 +1,4 @@
+import random
 from django.db import models
 
 
@@ -12,6 +13,7 @@ class QuickNote(models.Model):
         (COLOR_RED, "Red"),
         (COLOR_BLUE, "Blue"),
     ]
+    COLORS = [COLOR_YELLOW, COLOR_GREEN, COLOR_RED, COLOR_BLUE]
 
     NOTE_PERSONAL = "personal"
     NOTE_TEAM = "team"
@@ -26,8 +28,7 @@ class QuickNote(models.Model):
     created_by = models.ForeignKey(
         "accounts.WorkspaceMembership", on_delete=models.CASCADE, related_name="notes"
     )
-    title = models.CharField(max_length=200)
-    content = models.TextField(blank=True)
+    content = models.TextField()
     color = models.CharField(max_length=10, choices=COLOR_CHOICES, default=COLOR_YELLOW)
     note_type = models.CharField(max_length=10, choices=TYPE_CHOICES, default=NOTE_PERSONAL)
     is_pinned = models.BooleanField(default=False)
@@ -42,5 +43,10 @@ class QuickNote(models.Model):
         ]
         ordering = ["-is_pinned", "-updated_at"]
 
+    def save(self, *args, **kwargs):
+        if not self.pk and self.color == self.COLOR_YELLOW:
+            self.color = random.choice(self.COLORS)
+        super().save(*args, **kwargs)
+
     def __str__(self):
-        return f"{self.title} [{self.workspace.slug}]"
+        return f"Note by {self.created_by_id} [{self.workspace_id}]"
