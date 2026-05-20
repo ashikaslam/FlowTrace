@@ -268,7 +268,6 @@
 const slug = '{{ workspace_slug }}';
 document.body.dataset.workspace = slug;
 let currentSession = null;
-let timerInterval = null;
 let allTasks = [];
 
 function showSection(name) {
@@ -304,7 +303,6 @@ function updateActiveCard() {
   if (!currentSession) {
     noSess.classList.remove('hidden'); hasSess.classList.add('hidden');
     badge.classList.add('hidden');
-    clearInterval(timerInterval);
     return;
   }
   noSess.classList.add('hidden'); hasSess.classList.remove('hidden');
@@ -314,13 +312,10 @@ function updateActiveCard() {
   document.getElementById('active-task-since').textContent = `Started ${new Date(currentSession.started_at).toLocaleTimeString()}`;
   document.getElementById('active-completion').textContent = `${currentSession.completion}%`;
   document.getElementById('active-progress-bar').style.width = `${currentSession.completion}%`;
-  clearInterval(timerInterval);
-  timerInterval = setInterval(() => {
-    const elapsed = Math.floor((Date.now() - new Date(currentSession.started_at)) / 1000);
-    const m = Math.floor(elapsed / 60).toString().padStart(2,'0');
-    const s = (elapsed % 60).toString().padStart(2,'0');
-    document.getElementById('active-timer').textContent = `${m}:${s}`;
-  }, 1000);
+  const elapsed = Math.floor((Date.now() - new Date(currentSession.started_at)) / 1000);
+  const m = Math.floor(elapsed / 60).toString().padStart(2,'0');
+  const s = (elapsed % 60).toString().padStart(2,'0');
+  document.getElementById('active-timer').textContent = `${m}:${s}`;
 }
 
 async function quickCreate() {
